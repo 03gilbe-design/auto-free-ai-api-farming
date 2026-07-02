@@ -1,0 +1,177 @@
+"""Deterministic signup form filler: email/password/name/confirm, ticks consents, submits.
+Detects phone fields (tree branch: phone -> AI attempts skip).
+"""
+from __future__ import annotations
+import os, re
+
+# Active account, set via env vars (multi-account collection). No personal defaults ship here.
+EMAIL = os.environ.get("SIGNUP_ACCOUNT", "you@example.com")
+PASSWORD = os.environ.get("SIGNUP_PASSWORD", "ChangeMe2026!Farm")
+NAME = os.environ.get("SIGNUP_NAME", "API Bot")   # pseudonym used on signup forms
+
+_FIRST_PW_DONE = "_pw_done"
+
+
+async def _fill_first(page, selectors, value) -> bool:
+    for sel in selectors:
+        try:
+            loc = page.locator(sel).first
+            if await loc.count() and await loc.is_visible() and await loc.is_editable():
+                await loc.fill(value, timeout=2000)
+                return True
+        except Exception:
+            continue
+    return False
+
+
+async def fill_form(page, log=None) -> dict:
+    rep = {}
+    rep["email"] = await _fill_first(page, [
+        "input[type=email]", "input[name*=email i]", "input[id*=email i]",
+        "input[placeholder*=email i]", "input[autocomplete=email]"], EMAIL)
+    # password (prima occorrenza)
+    pw_sel = ["input[type=password]", "input[name*=pass i]", "input[id*=pass i]"]
+    rep["password"] = await _fill_first(page, pw_sel, PASSWORD)
+    # conferma password = seconda password visibile
+    try:
+        pws = page.locator("input[type=password]")
+        if await pws.count() >= 2:
+            loc = pws.nth(1)
+            if await loc.is_visible():
+                await loc.fill(PASSWORD, timeout=2000)
+                rep["password2"] = True
+    except Exception:
+        pass
+    # ORGANIZZAZIONE / azienda / team / workspace: campo tipico dell'onboarding (Mistral, ecc).
+    # Va PRIMA del nome generico (altrimenti "name" lo intercetta). Valore innocuo.
+    rep["org"] = await _fill_first(page, [
+        "input[name*=org i]", "input[id*=org i]", "input[placeholder*=organizzaz i]",
+        "input[placeholder*=organization i]", "input[name*=company i]", "input[name*=team i]",
+        "input[name*=workspace i]", "input[placeholder*=team i]", "input[placeholder*=workspace i]"],
+        "La mia org")
+    rep["name"] = await _fill_first(page, [
+        "input[name*=name i]:not([name*=user i]):not([name*=org i]):not([name*=company i])",
+        "input[id*=name i]", "input[placeholder*=nome i]", "input[placeholder*=name i]",
+        "input[autocomplete=name]", "input[autocomplete=given-name]"], NAME)
+    # consensi: spunta OGNI checkbox non spuntata (tos/privacy). L'input vero e' spesso NASCOSTO
+    # (opacity 0, stile custom sopra) -> check(force=True) bypassa la visibilita'. Un solo modo
+    # generico, niente selettori per-sito.
+    checks = 0
+    try:
+        cbs = page.locator("input[type=checkbox], [role=checkbox]")
+        n = await cbs.count()
+        if log: log.dbg("form consensi", checkbox_trovati=n)
+        for i in range(min(n, 10)):
+            cb = cbs.nth(i)
+            try:
+                if await cb.is_checked():
+                    continue
+            except Exception as e:
+                if log: log.dbg("is_checked fail", i=i, err=str(e))
+            try:
+                await cb.scroll_into_view_if_needed(timeout=1500)
+            except Exception:
+                pass
+            try:
+                await cb.scroll_into_view_if_needed(timeout=1500)
+            except Exception:
+                pass
+            try:
+                await cb.check(force=True, timeout=1500)
+                checks += 1
+            except Exception as e1:
+                if log: log.dbg("check fail", i=i, err=str(e1)[:150])
+                try:
+                    await cb.click(force=True, timeout=1200); checks += 1
+                except Exception as e2:
+                    if log: log.dbg("click fail", i=i, err=str(e2)[:150])
+                    # ULTIMO tentativo: click MOUSE reale sulle coordinate (non .check/.click di
+                    # Playwright, non JS .checked). Componenti React-controllati (Radix/shadcn)
+                    # ignorano .checked+dispatchEvent: serve l'evento nativo del sistema operativo
+                    # che il synthetic event system di React intercetta davvero.
+                    try:
+                        box = await cb.bounding_box()
+                        if box:
+                            cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+                            await page.mouse.click(cx, cy)
+                            checks += 1
+                    except Exception as e3:
+                        if log: log.dbg("mouse check fail", i=i, err=str(e3)[:150])
+    except Exception as e:
+        if log: log.dbg("consensi loop fail", err=str(e))
+    rep["consents"] = checks
+    if log:
+        log.step("FORM", "compilato",
+                 f"email={'✓' if rep['email'] else '✗'} pw={'✓' if rep['password'] else '✗'} "
+                 f"nome={'✓' if rep['name'] else '–'} consensi={checks}", "ok")
+    return rep
+
+
+_SUBMIT_TEXT = ["sign up", "register", "create account", "crea account", "iscriviti",
+                "get started", "continue", "continua", "submit", "create", "crea", "next", "avanti"]
+
+
+async def _clickable(loc) -> bool:
+    """Visibile E abilitato: molti form (Mistral 'Crea organizzazione') tengono il submit
+    disabled finche' non spunti i consensi -> click su disabled va in timeout inutile."""
+    try:
+        if not await loc.is_visible():
+            return False
+        return await loc.is_enabled()
+    except Exception:
+        return False
+
+
+async def submit(page, log=None) -> bool:
+    # bottone submit esplicito
+    for sel in ["button[type=submit]", "input[type=submit]"]:
+        try:
+            loc = page.locator(sel).first
+            if await loc.count() and await _clickable(loc):
+                await loc.click(timeout=2500)
+                if log: log.step("FORM", "submit", sel, "ok")
+                return True
+        except Exception:
+            continue
+    # match per PAROLA intera dentro al testo del bottone (non l'intero testo): "crea" deve
+    # matchare "Crea organizzazione", non solo un bottone che dice esattamente "crea".
+    for t in _SUBMIT_TEXT:
+        try:
+            loc = page.locator("button", has_text=re.compile(rf"\b{t}\b", re.I)).first
+            if await loc.count() and await _clickable(loc):
+                await loc.click(timeout=2500)
+                if log: log.step("FORM", "submit", f"text:{t}", "ok")
+                return True
+        except Exception:
+            continue
+    if log: log.step("FORM", "submit assente", "", "warn")
+    return False
+
+
+async def complete_form(page, log=None) -> dict:
+    """Componente GENERICO deterministico (no AI, no per-sito): compila i campi presenti
+    (email/pw/nome/ORG), spunta i consensi (force, anche checkbox nascoste), poi submit.
+    Usabile su QUALSIASI pagina con un form di onboarding/registrazione. Ritorna cosa ha fatto
+    + se ha inviato. Chiamato prima del fallback AI: molti 'muri' sono solo un form da riempire."""
+    before = page.url
+    rep = await fill_form(page, log)
+    acted = any([rep.get("email"), rep.get("name"), rep.get("org"), rep.get("consents")])
+    sent = False
+    if acted:
+        sent = await submit(page, log)
+        try:
+            await page.wait_for_timeout(1500)
+        except Exception:
+            pass
+    rep["submitted"] = sent
+    rep["advanced"] = sent or page.url != before
+    return rep
+
+
+async def has_phone(page) -> bool:
+    try:
+        loc = page.locator("input[type=tel], input[name*=phone i], input[id*=phone i], "
+                           "input[placeholder*=phone i], input[placeholder*=telefono i]")
+        return bool(await loc.count() and await loc.first.is_visible())
+    except Exception:
+        return False

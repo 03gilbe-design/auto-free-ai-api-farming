@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+out/
+chrome_profile*/
+*.env
+.env
+learned_actions.json
+keys.txt
+.google_pw
