@@ -198,10 +198,22 @@ async def handle_google_page(gp, email: str, log=None) -> None:
                         if await b.count() and await b.is_visible():
                             await b.click(timeout=2000); break
                 await gp.wait_for_timeout(2500)
-                # se DOPO l'invio siamo ancora sul campo password con lo stesso valore -> pw SBAGLIATA
+                # se DOPO l'invio siamo ANCORA sul campo password con lo stesso valore -> pw
+                # SBAGLIATA. Un solo check subito dopo il submit e' una race: la pagina puo'
+                # essere in transizione (OAuth che poi riesce comunque) e mostrare ancora il
+                # campo per una frazione di secondo -> falso warning fuorviante (visto nel trace
+                # Groq: OAuth completava con successo, ma il warning appariva lo stesso).
+                # Ricontrolla un paio di volte prima di dichiarare il fallimento.
                 try:
-                    still = gp.locator("input[type=password]:visible").first
-                    if await still.count() and (await still.input_value()):
+                    still_failed = False
+                    for _ in range(3):
+                        still = gp.locator("input[type=password]:visible").first
+                        if not (await still.count() and await still.input_value()):
+                            still_failed = False
+                            break
+                        still_failed = True
+                        await gp.wait_for_timeout(1000)
+                    if still_failed:
                         if log: log.step("GOOGLE", "password rifiutata?", "verifica GOOGLE_PW", "warn")
                 except Exception:
                     pass

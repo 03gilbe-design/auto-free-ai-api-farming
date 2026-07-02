@@ -159,13 +159,22 @@ c'e'. Se vedi solo un campo email/token, compila quello. Google solo se visibile
 _TAG2TYPE = {"button": "button", "a": "link", "[role=button]": "button", "*": "button"}
 
 
+def _strip_deco(s: str) -> str:
+    """page2text renders elements with decorators the AI copies verbatim into its action
+    ([Text]=button, <Text>=link, *Text*=field, #Text=heading) — strip them before building a
+    Playwright selector, or ':has-text(\"[Close]\")' never matches the real DOM text 'Close'.
+    This was the actual reason live runs stalled right at the create-key modal (0 keys
+    extracted even after reaching it): _exec silently failed to match anything."""
+    return re.sub(r"^[\[\<\*#\s]+|[\]\>\*\s]+$", "", s or "").strip()
+
+
 async def _exec(page, act: dict, log=None) -> str | None:
     """Esegue l'azione. Ritorna il TIPO di elemento toccato (textbox/button/link/nav) se riuscita,
     None se fallita. Il tipo serve a learned.record (elemento gia' visto)."""
     a = act.get("action")
     try:
         if a == "click":
-            t = act.get("text", "")
+            t = _strip_deco(act.get("text", ""))
             for tag in ["button", "a", "[role=button]", "*"]:
                 loc = page.locator(f"{tag}:has-text('{t}')").first
                 if await loc.count() and await loc.is_visible():
@@ -179,16 +188,31 @@ async def _exec(page, act: dict, log=None) -> str | None:
                     await loc.click(timeout=3000)
                     return _TAG2TYPE[tag]
         elif a == "fill":
-            ph = act.get("placeholder", "")
-            loc = page.locator(f"input[placeholder*='{ph}' i], textarea[placeholder*='{ph}' i]").first
-            if await loc.count():
-                await loc.fill(act.get("value", ""), timeout=2500)
-                return "textbox"
+            ph = _strip_deco(act.get("placeholder", ""))
+            val = act.get("value", "")
+            # cascata: placeholder -> aria-label -> name/id -> textbox visibile dentro una modale
+            # aperta (il caso reale che bloccava Groq: il campo "Key name" nel dialog create-key
+            # non ha un placeholder che matcha) -> qualsiasi textbox visibile come ultima spiaggia.
+            cands = [
+                f"input[placeholder*='{ph}' i], textarea[placeholder*='{ph}' i]",
+                f"[aria-label*='{ph}' i]",
+                f"input[name*='{ph}' i], input[id*='{ph}' i]",
+                "[role=dialog] input:visible, dialog input:visible, [aria-modal='true'] input:visible",
+                "input:visible, textarea:visible, [role=textbox]:visible",
+            ] if ph else [
+                "[role=dialog] input:visible, dialog input:visible, [aria-modal='true'] input:visible",
+                "input:visible, textarea:visible, [role=textbox]:visible",
+            ]
+            for sel in cands:
+                loc = page.locator(sel).first
+                if await loc.count() and await loc.is_visible():
+                    await loc.fill(val, timeout=2500)
+                    return "textbox"
         elif a == "check":
             # SPUNTA una checkbox (es. "Accetto i Termini"). L'input VERO spesso e' nascosto
             # (opacity 0, stile custom sopra) -> is_visible()=False. Percio': prima l'input per
             # ruolo/tipo con FORCE (bypassa la visibilita'), poi la label/wrapper visibile cliccabile.
-            t = act.get("text", "")
+            t = _strip_deco(act.get("text", ""))
             # 1) input checkbox associato al testo, o il primo: check(force) anche se nascosto
             for sel in (f"label:has-text('{t}') input[type=checkbox]",
                         f"input[type=checkbox][aria-label*='{t}' i]",
@@ -260,8 +284,12 @@ async def ai_step(page, goal: str, max_steps: int = 12, log=None, deadline_s: fl
                   site: str = "") -> dict:
     """AI fallback con FAIL-FAST: mai appendere.
     - DEADLINE wall-clock (default 75s): scaduta -> stop, non importa quanti step.
-    - LOOP-DETECTION: se la pagina (testo) non cambia per 3 step, o la stessa azione si ripete,
-      l'AI sta girando a vuoto -> giveup. (l'utente odiava il "fermo a far niente").
+    - LOOP-DETECTION: la stessa azione RIUSCITA due volte di fila = loop reale -> giveup.
+      Un'azione FALLITA ripetuta (es. _exec non trova l'elemento) NON e' un loop: e' un
+      fallimento di esecuzione, e va trattato separatamente (altrimenti un singolo selettore
+      che non matcha abortisce il sito anche quando l'AI aveva gia raggiunto l'obiettivo -
+      era il bug che azzerava le key estratte su Groq pur arrivando al modale create-key).
+    - Se la pagina (testo) non cambia per 3 step, l'AI sta girando a vuoto -> tenta la vista.
     - max_steps basso (12): un muro non si sblocca con 100 tentativi lenti.
     """
     if not keypool.available():
@@ -271,7 +299,8 @@ async def ai_step(page, goal: str, max_steps: int = 12, log=None, deadline_s: fl
     t0 = time.time()
     prev_txt = None
     stuck = 0
-    last_act = None
+    last_ok_act = None    # ultima azione ESEGUITA CON SUCCESSO (loop-guard vero)
+    fail_streak = 0        # fallimenti di _exec consecutivi (indipendente dal loop-guard)
     for i in range(max_steps):
         if time.time() - t0 > deadline_s:
             if log: log.step("AI", "stop deadline", f"{i} step / {int(deadline_s)}s", "warn")
@@ -307,15 +336,22 @@ async def ai_step(page, goal: str, max_steps: int = 12, log=None, deadline_s: fl
         if a == "giveup":
             if log: log.step("AI", "giveup", f"{i} step", "warn")
             return {"done": False, "reason": "ai_giveup"}
-        # stessa azione identica ripetuta = loop -> giveup
-        if act == last_act:
+        # stessa azione ESEGUITA CON SUCCESSO ripetuta = loop reale -> giveup.
+        # (un'azione fallita ripetuta NON conta qui: la gestisce fail_streak sotto)
+        if act == last_ok_act:
             if log: log.step("AI", "azione ripetuta", "loop", "warn")
             return {"done": False, "reason": "ai_repeat"}
-        last_act = act
         url_before = page.url
         el_type = await _exec(page, act, log)
-        if not el_type and log:
-            log.dbg("ai act non eseguita", act=act)
+        if el_type:
+            fail_streak = 0
+            last_ok_act = act
+        else:
+            fail_streak += 1
+            if log: log.dbg("ai act non eseguita", act=act, fail_streak=fail_streak)
+            if fail_streak >= 3:
+                if log: log.step("AI", "esecuzione fallita 3x", "azione non eseguibile, giveup", "warn")
+                return {"done": False, "reason": "ai_exec_fail"}
         await page.wait_for_timeout(1000)
         # APPRENDIMENTO: azione riuscita che ha fatto AVANZARE (url cambiato, o fill/nav) ->
         # salvala come ricetta deterministica per le prossime volte (meno usage AI).

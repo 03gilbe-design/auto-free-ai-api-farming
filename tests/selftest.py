@@ -7,7 +7,8 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 ROOT = HERE.parent
-TESTS = ["tests/test_offline.py", "tests/test_real_offline.py", "tests/test_regression.py"]
+TESTS = ["tests/test_offline.py", "tests/test_exec_dialog.py",
+         "tests/test_real_offline.py", "tests/test_regression.py"]
 
 
 def run_once(i):
