@@ -16,8 +16,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-_PATH = Path(__file__).parent / "sites.json"
-_EXTRA_PATH = Path(__file__).parent / "sites_extra.json"
+_PATH = Path(__file__).parent.parent / "data" / "sites.json"
+_EXTRA_PATH = Path(__file__).parent.parent / "data" / "sites_extra.json"
 _CACHE: dict | None = None
 
 # campi che il vecchio grabkey.PROVIDERS si aspetta

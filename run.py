@@ -9,12 +9,12 @@ Non interattivo: gira, salva, esce. Monitorabile da telefono leggendo out/trace.
 from __future__ import annotations
 import asyncio, json, sys, time
 from pathlib import Path
-from browser import Browser
-from log import Log
-from sites import SITES, site_cfg
-import registry
-import tree
-import forms
+from farmer.browser import Browser
+from farmer.log import Log
+from farmer.sites import SITES, site_cfg
+from farmer import registry
+from farmer import tree
+from farmer import forms
 
 OUT = Path(__file__).parent / "out"
 RESULTS = OUT / "results.json"

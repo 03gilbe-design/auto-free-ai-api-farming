@@ -54,7 +54,7 @@ _AUTHORIZE_TEXT = ["authorize", "autorizza", "continue", "continua"]
 async def _click_button(page) -> bool:
     # TESTO visibile prima (qualsiasi verbo: 'Get started with GitHub'...), attributi fallback.
     # Stessa logica condivisa di google_oauth (oauth_text) — niente frasi-esatte hardcoded.
-    import oauth_text
+    from . import oauth_text
     return await oauth_text.click_login(page, "github", _BTN_SEL, _BTN_TEXT)
 
 

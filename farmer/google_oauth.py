@@ -40,7 +40,7 @@ def _google_pw() -> str | None:
     # FALLBACK: la password Google e' la STESSA del signup (gia nota, forms.PASSWORD).
     # Vale per account_a e account_b (stessa password, detto dall'utente). Niente file da gestire.
     try:
-        import forms
+        from . import forms
         return forms.PASSWORD
     except Exception:
         return None
@@ -76,7 +76,7 @@ _ALLOW_TEXT = ["allow", "consenti", "authorize", "autorizza", "continue", "conti
 async def _click_button(page) -> bool:
     """Trova il bottone 'login con Google': TESTO visibile prima (qualsiasi verbo), attributi fallback.
     Logica condivisa in oauth_text (stessa per GitHub) — niente keyword per-sito."""
-    import oauth_text
+    from . import oauth_text
     return await oauth_text.click_login(page, "google", _BTN_SEL, _BTN_TEXT)
 
 

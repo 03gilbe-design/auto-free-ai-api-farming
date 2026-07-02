@@ -1,8 +1,8 @@
 """Lista siti target. Solo AI gratis veri (Gmail ok, no telefono/carta obbligatori).
 provider = chiave in grabkey.PROVIDERS. via_google = preferisci OAuth Google.
 """
-from grabkey import PROVIDERS
-from registry import sites_compat
+from .grabkey import PROVIDERS
+from .registry import sites_compat
 
 # FONTE UNICA = sites.json (via registry). SITES qui ricostruito, non hardcoded.
 SITES = sites_compat()

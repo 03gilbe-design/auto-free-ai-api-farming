@@ -1,33 +1,32 @@
-"""Genera out/path.html: l'albero del percorso seguito per ogni sito.
+"""Generates out/path.html: a visual tree of the path taken through each site.
 
-A sinistra la spina dorsale dell'albero (le tappe fisse, in italiano): ogni tappa
-diventa verde se attraversata, resta grigia se saltata. A destra la cronologia
-dettagliata, con una freccia-marcatore a sinistra di ogni riga colorata per esito.
-Nessuna emoji: solo icone SVG. Leggibile anche da telefono.
+Left: the fixed backbone of stages (green = visited, gray = skipped). Right: the
+detailed step-by-step history, colored by outcome. No emoji, SVG icons only.
+Readable on mobile too.
 
-Uso: py -3.11 -X utf8 path_viewer.py   (dopo un run)
+Usage: python path_viewer.py   (run after a farming run)
 """
 from __future__ import annotations
 import json, html
 from pathlib import Path
 from collections import OrderedDict
 
-OUT = Path(__file__).parent / "out"
+OUT = Path(__file__).parent.parent / "out"
 JSONL = OUT / "debug.jsonl"
 HTMLF = OUT / "path.html"
 
 # Spina dorsale = tappe fisse dell'albero, in ordine. Etichette in italiano chiaro,
 # senza sigle interne ne underscore. (codice tecnico -> nome leggibile)
 SPINE = [
-    ("COOKIE",  "Banner cookie"),
-    ("ENTRY",   "Trova registrazione"),
-    ("GOOGLE",  "Accesso con Google"),
-    ("FORM",    "Modulo email e password"),
-    ("VERIFY",  "Verifica email"),
-    ("ONBOARD", "Salta presentazione"),
-    ("KEY",     "Trova e genera chiave"),
-    ("AI",      "Aiuto automatico"),
-    ("DONE",    "Esito finale"),
+    ("COOKIE",  "Cookie banner"),
+    ("ENTRY",   "Find signup"),
+    ("GOOGLE",  "Google login"),
+    ("FORM",    "Email/password form"),
+    ("VERIFY",  "Email verification"),
+    ("ONBOARD", "Skip onboarding"),
+    ("KEY",     "Find/generate key"),
+    ("AI",      "AI fallback"),
+    ("DONE",    "Final outcome"),
 ]
 
 # colori per esito di una riga
@@ -36,12 +35,12 @@ _COL = {"ok": "#36d399", "skip": "#7a8aa0", "ai": "#c084fc", "warn": "#fbbf24",
         "captcha": "#fb7185"}
 
 # nome leggibile per ogni tappa tecnica (usato nella cronologia di destra)
-_STAGE_IT = {
-    "COOKIE": "Banner cookie", "ENTRY": "Trova registrazione", "GOOGLE": "Accesso con Google",
-    "FORM": "Modulo email/password", "VERIFY": "Verifica email", "ONBOARD": "Salta presentazione",
-    "KEY": "Chiave API", "AI": "Aiuto automatico", "DONE": "Esito", "GOTO": "Apri pagina",
-    "GOOGLE-": "Accesso con Google", "KEY-NAV": "Vai alla chiave", "RUN": "Esecuzione",
-    "RESULT": "Risultato", "SKIP": "Saltato",
+_STAGE_EN = {
+    "COOKIE": "Cookie banner", "ENTRY": "Find signup", "GOOGLE": "Google login",
+    "FORM": "Email/password form", "VERIFY": "Email verification", "ONBOARD": "Skip onboarding",
+    "KEY": "API key", "AI": "AI fallback", "DONE": "Outcome", "GOTO": "Open page",
+    "GOOGLE-": "Google login", "KEY-NAV": "Go to key page", "RUN": "Run",
+    "RESULT": "Result", "SKIP": "Skipped",
 }
 
 # Icone SVG (16x16, currentColor) per ogni tipo di esito. Niente emoji.
@@ -78,8 +77,8 @@ def _icon_raw(body, size=15, cls=""):
             f'aria-hidden="true" style="flex:0 0 auto;vertical-align:middle">{body}</svg>')
 
 
-def _stage_it(code):
-    return _STAGE_IT.get((code or "").upper(), (code or "").capitalize())
+def _stage_en(code):
+    return _STAGE_EN.get((code or "").upper(), (code or "").capitalize())
 
 
 def _load():
@@ -107,9 +106,9 @@ def _esc(s):
 
 def render():
     sites = _load()
-    parts = ["""<!doctype html><html lang="it"><head><meta charset="utf-8">
+    parts = ["""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Percorso albero — registrazioni automatiche</title><style>
+<title>Signup path tree — auto-free-ai-api-farming</title><style>
 *{box-sizing:border-box}
 body{margin:0;background:#0e1726;color:#e6edf6;font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:16px}
 h1{font-size:20px;margin:0 0 4px;display:flex;gap:8px;align-items:center}
@@ -136,15 +135,15 @@ h1{font-size:20px;margin:0 0 4px;display:flex;gap:8px;align-items:center}
 @media(max-width:600px){.grid{grid-template-columns:1fr}.spine{flex-direction:row;flex-wrap:wrap}.spine .node{flex:1 1 auto}}
 </style></head><body>"""]
 
-    parts.append(f'<h1>{_icon_raw(_TREE, 22)} Percorso dell\'albero</h1>')
-    parts.append('<p class="sub">Tappe seguite per ogni sito. A sinistra la mappa fissa '
-                 '(verde = attraversata, grigia = saltata). A destra la cronologia, '
-                 'una freccia per ogni passo. Generato da out/debug.jsonl.</p>')
+    parts.append(f'<h1>{_icon_raw(_TREE, 22)} Signup path tree</h1>')
+    parts.append('<p class="sub">Stages followed for each site. Left: the fixed map '
+                 '(green = visited, gray = skipped). Right: the step-by-step history, '
+                 'one arrow per action. Generated from out/debug.jsonl.</p>')
 
     # legenda colori/icone
     parts.append('<div class="legend">')
-    leg = [("ok", "riuscito"), ("skip", "saltato"), ("ai", "aiuto automatico"),
-           ("wait", "in attesa"), ("warn", "attenzione"), ("err", "errore"), ("key", "chiave")]
+    leg = [("ok", "success"), ("skip", "skipped"), ("ai", "AI fallback"),
+           ("wait", "waiting"), ("warn", "warning"), ("err", "error"), ("key", "key")]
     for k, lab in leg:
         col = _COL.get(k, "#9aa7b8")
         parts.append(f'<span style="color:{col}">{_svg(k, 14)}</span>'
@@ -152,7 +151,7 @@ h1{font-size:20px;margin:0 0 4px;display:flex;gap:8px;align-items:center}
     parts.append('</div>')
 
     if not sites or not any(sites.values()):
-        parts.append('<p class="note">Nessun dato: lancia prima un run o la demo.</p></body></html>')
+        parts.append('<p class="note">No data yet: run a farming session or the demo first.</p></body></html>')
         HTMLF.write_text("\n".join(parts), encoding="utf-8")
         print(f"scritto {HTMLF}  (0 siti)")
         return
@@ -164,11 +163,11 @@ h1{font-size:20px;margin:0 0 4px;display:flex;gap:8px;align-items:center}
         last = steps[-1]
         ok = last.get("stage") == "DONE" and last.get("kind") == "key"
         if ok:
-            bcol, bk, btxt = "#36d399", "key", "Chiave ottenuta"
+            bcol, bk, btxt = "#36d399", "key", "Key obtained"
         elif last.get("stage") == "DONE":
-            bcol, bk, btxt = "#f87171", "err", "Nessuna chiave"
+            bcol, bk, btxt = "#f87171", "err", "No key"
         else:
-            bcol, bk, btxt = "#fbbf24", "warn", "Incompleto"
+            bcol, bk, btxt = "#fbbf24", "warn", "Incomplete"
 
         parts.append(f'<div class="site"><h2>{_esc(site)} '
                      f'<span class="badge" style="background:{bcol}">{_svg(bk, 13)}{btxt}</span></h2>')
@@ -188,7 +187,7 @@ h1{font-size:20px;margin:0 0 4px;display:flex;gap:8px;align-items:center}
                 f'<div class="row" style="border-left:3px solid {col}">'
                 f'<span class="arr" style="color:{col}">{_icon_raw(_ARROW, 14)}</span>'
                 f'<span class="ico" style="color:{col}">{_svg(k, 14)}</span>'
-                f'<span class="body"><span class="stg">{_esc(_stage_it(s.get("stage")))}</span>: '
+                f'<span class="body"><span class="stg">{_esc(_stage_en(s.get("stage")))}</span>: '
                 f'{_esc(s.get("outcome"))}{det}</span></div>')
         parts.append('</div></div></div>')
 

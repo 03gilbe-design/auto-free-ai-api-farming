@@ -12,7 +12,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from playwright.async_api import async_playwright
-import grabkey
+import sys, pathlib; sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+from farmer import grabkey
 
 FIX = (Path(__file__).parent / "fixtures" / "ai21_like.html").resolve().as_uri()
 

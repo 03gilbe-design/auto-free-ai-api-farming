@@ -10,7 +10,7 @@ from __future__ import annotations
 import json, sys, time
 from pathlib import Path
 
-OUT = Path(__file__).parent / "out"
+OUT = Path(__file__).parent.parent / "out"
 OUT.mkdir(exist_ok=True)
 _JSONL = OUT / "debug.jsonl"
 _TRACE = OUT / "trace.txt"

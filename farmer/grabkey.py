@@ -16,7 +16,7 @@ KEY_NAME = "pcAi"
 
 # provider -> {key_url, key_re, dropdowns}
 # FONTE UNICA = sites.json (via registry). Niente piu' dati duplicati qui.
-from registry import providers_compat as _providers_compat
+from .registry import providers_compat as _providers_compat
 PROVIDERS = _providers_compat()
 _GEN_TEXT = ["create api key", "create new key", "create key", "new key", "+ create", "generate",
              "crea chiave", "crea nuova chiave", "crea chiave api", "nuova chiave", "genera", "create"]

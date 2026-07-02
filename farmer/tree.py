@@ -9,7 +9,7 @@ A meta sito non ci si ferma mai: si arriva sempre a un esito.
 """
 from __future__ import annotations
 import os, re
-import cookies, links, google_oauth, forms, grabkey, ai_fallback, logout, github_oauth, snapshot
+from . import cookies, links, google_oauth, forms, grabkey, ai_fallback, logout, github_oauth, snapshot
 
 KEY_HINT = ("api-key", "apikey", "/keys", "/tokens", "developer", "dashboard")
 NOT_LOGGED = ("sign in", "sign up", "log in", "accedi", "registrati", "create account")

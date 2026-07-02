@@ -14,7 +14,7 @@ from playwright.async_api import async_playwright
 # cosi i siti che NON forzano il chooser (Cohere/Mistral/Google) auto-loggano l'account giusto.
 #   SIGNUP_PROFILE=account_b  -> .../chrome_profile_account_b
 #   (vuoto/account_a)       -> .../chrome_profile  (default storico)
-_DEF_PROFILE = Path(__file__).parent.parent / "api_signup" / "chrome_profile"
+_DEF_PROFILE = Path(__file__).parent.parent / "chrome_profile"
 _prof = os.environ.get("SIGNUP_PROFILE", "").strip()
 # SUB-PROFILO Chrome: gli account 2°/3° sono gia loggati in sub-profili DENTRO la user-data-dir
 # condivisa (Default=account_a/3-account, Profile 1=account_b, Profile 2=account_c). Selezionarli

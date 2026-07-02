@@ -10,7 +10,8 @@ from __future__ import annotations
 import asyncio, sys, base64, html as _h
 from pathlib import Path
 from playwright.async_api import async_playwright
-from page2text import page_to_text_all_frames
+import sys, pathlib; sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+from farmer.page2text import page_to_text_all_frames
 
 ROOT = Path(__file__).parent
 OUT = ROOT / "out" / "page2text_demo.html"

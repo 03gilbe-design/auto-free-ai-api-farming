@@ -8,8 +8,8 @@ Degrada a no-op se manca GROQ_KEY o rete giù (ritorna {"done":False,"reason":"a
 from __future__ import annotations
 import base64, json, os, re, time, urllib.request, urllib.error
 from pathlib import Path
-from page2text import page_to_text_all_frames
-import forms
+from .page2text import page_to_text_all_frames
+from . import forms
 
 MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"  # multimodale: accetta anche immagini
 # file dove puo stare la key, in ordine di priorita
@@ -252,7 +252,7 @@ async def replay_learned(page, site: str, goal: str, log=None) -> int:
     if not site:
         return 0
     try:
-        import learned
+        from . import learned
     except Exception:
         return 0
     hits = 0
@@ -347,7 +347,7 @@ async def ai_step(page, goal: str, max_steps: int = 12, log=None, deadline_s: fl
             advanced = page.url != url_before or el_type in ("textbox", "nav", "checkbox")
             if advanced:
                 try:
-                    import learned
+                    from . import learned
                     learned.record(site, url_before, goal, act, el_type)
                 except Exception:
                     pass

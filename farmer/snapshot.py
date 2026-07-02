@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib, os, re
 from pathlib import Path
 
-ROOT = Path(__file__).parent / "fixtures" / "snaps"
+ROOT = Path(__file__).parent.parent / "fixtures" / "snaps"
 _saved: set[str] = set()   # (sito/stato) gia' salvati in questo processo -> niente loop
 _auto_hashes: set[str] = set()   # hash schermate gia' catturate (auto) -> niente doppioni
 _auto_n = {"i": 0}

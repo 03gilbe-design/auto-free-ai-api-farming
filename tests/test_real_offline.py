@@ -8,7 +8,8 @@ from __future__ import annotations
 import asyncio, re
 from pathlib import Path
 from playwright.async_api import async_playwright
-import grabkey, google_oauth, github_oauth
+import sys, pathlib; sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+from farmer import grabkey, google_oauth, github_oauth
 
 REAL = Path(__file__).parent / "fixtures" / "real"
 
