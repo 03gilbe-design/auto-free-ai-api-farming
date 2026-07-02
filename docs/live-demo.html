@@ -1,0 +1,250 @@
+<title>Watch the agent farm an API key — live replay</title>
+<style>
+  :root{
+    --ink:#0a0e1a; --ink2:#0f1524; --panel:#121a2e; --line:#202c47;
+    --txt:#e8eefb; --dim:#7c8bab; --faint:#4a5877;
+    --ok:#42e39a; --skip:#6d7fa3; --ai:#b28bff; --warn:#ffcb57; --err:#ff6b7d; --key:#38e0f0;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 78% -10%, #14203a 0%, transparent 60%),
+      radial-gradient(900px 500px at -5% 110%, #161033 0%, transparent 55%),
+      var(--ink);
+    color:var(--txt); font-family:var(--sans); line-height:1.5;
+    padding:clamp(16px,3vw,40px); min-height:100vh;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px 18px;margin-bottom:6px}
+  h1{font-size:clamp(20px,3.4vw,30px);margin:0;letter-spacing:-.02em;font-weight:680;text-wrap:balance}
+  .site-pill{font-family:var(--mono);font-size:13px;color:var(--key);
+    border:1px solid #1c4a55;background:#0c2830;padding:3px 11px;border-radius:20px}
+  .sub{color:var(--dim);font-size:14.5px;margin:2px 0 20px;max-width:64ch}
+  .sub b{color:var(--txt);font-weight:600}
+
+  .stage{display:grid;grid-template-columns:230px 1fr;gap:20px}
+  @media(max-width:680px){.stage{grid-template-columns:1fr}}
+
+  /* backbone */
+  .spine{display:flex;flex-direction:column;gap:4px;position:relative}
+  .spine::before{content:"";position:absolute;left:15px;top:14px;bottom:14px;width:2px;
+    background:linear-gradient(var(--line),var(--line));z-index:0}
+  .node{display:flex;align-items:center;gap:11px;padding:7px 10px;border-radius:10px;
+    position:relative;z-index:1;opacity:.38;transition:opacity .4s, background .4s, transform .3s}
+  .node .dot{flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:2px solid var(--faint);
+    background:var(--ink);display:grid;place-items:center;transition:all .35s}
+  .node .dot svg{width:11px;height:11px;opacity:0;transform:scale(.4);transition:all .3s}
+  .node .lbl{font-size:13px;color:var(--dim);transition:color .35s}
+  .node.on{opacity:1;background:#101a30}
+  .node.on .lbl{color:var(--txt)}
+  .node.on .dot{border-color:var(--c);background:color-mix(in srgb,var(--c) 22%,var(--ink))}
+  .node.on .dot svg{opacity:1;transform:scale(1);color:var(--c)}
+  .node.pulse .dot{box-shadow:0 0 0 0 var(--c);animation:ping .7s ease-out}
+  @keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--c) 70%,transparent)}
+    100%{box-shadow:0 0 0 14px transparent}}
+
+  /* terminal */
+  .term{background:linear-gradient(#0c1322,#0a1020);border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;box-shadow:0 24px 60px -30px #000,inset 0 1px 0 #ffffff08}
+  .tbar{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);
+    background:#0e1626}
+  .tbar .b{width:11px;height:11px;border-radius:50%}
+  .tbar .b1{background:#ff5f57}.tbar .b2{background:#febc2e}.tbar .b3{background:#28c840}
+  .tbar .name{font-family:var(--mono);font-size:12px;color:var(--faint);margin-left:6px}
+  .tbar .prog{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim);
+    font-variant-numeric:tabular-nums}
+  .log{padding:14px 16px;font-family:var(--mono);font-size:13px;min-height:340px;
+    display:flex;flex-direction:column;gap:3px}
+  .ln{display:grid;grid-template-columns:16px 1fr;gap:10px;align-items:start;
+    opacity:0;transform:translateY(6px);animation:in .28s forwards}
+  @keyframes in{to{opacity:1;transform:none}}
+  .ln .ic{margin-top:2px;color:var(--c)}
+  .ln .ic svg{width:13px;height:13px;display:block}
+  .ln .tx{min-width:0;color:var(--txt)}
+  .ln .stg{color:var(--c);font-weight:600}
+  .ln .det{color:var(--faint)}
+  .ln.warnrow .tx{color:#ffe2a6}
+  .ln.errrow .tx{color:#ffc2c9}
+  .cursor{display:inline-block;width:8px;height:15px;background:var(--key);margin-left:3px;
+    vertical-align:-2px;animation:blink 1s step-end infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  .verdict{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    opacity:0;transition:opacity .5s}
+  .verdict.show{opacity:1}
+  .badge{font-family:var(--mono);font-size:13px;font-weight:700;padding:6px 14px;border-radius:22px;
+    display:inline-flex;align-items:center;gap:8px}
+  .badge.no{color:#ffd7dc;background:#2a0f16;border:1px solid #57202a}
+  .badge.yes{color:#c9fff0;background:#082922;border:1px solid #17564a}
+  .vtext{color:var(--dim);font-size:13.5px}
+
+  .controls{display:flex;gap:10px;margin:22px 0 8px;flex-wrap:wrap}
+  button{font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink);
+    background:var(--key);border:0;padding:9px 18px;border-radius:10px;cursor:pointer;
+    transition:transform .12s, filter .2s}
+  button:hover{filter:brightness(1.08)}button:active{transform:translateY(1px)}
+  button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line)}
+  button:focus-visible{outline:2px solid var(--key);outline-offset:2px}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:22px;padding-top:16px;
+    border-top:1px solid var(--line);font-size:12px;color:var(--dim)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:9px;height:9px;border-radius:50%}
+  .foot{color:var(--faint);font-size:12px;margin-top:14px;font-family:var(--mono)}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Watch the agent farm an API key</h1>
+    <span class="site-pill" id="sitePill">nebius.com</span>
+  </header>
+  <p class="sub">A real replay from <b>auto-free-ai-api-farming</b>. Each line is one thing the
+    agent actually did — dismiss the cookie wall, click through Google OAuth, land on the key
+    page. The backbone on the left lights up as stages are reached; the AI fallback steps in
+    only when the deterministic path runs out. This run ended without a key — an honest one.</p>
+
+  <div class="stage">
+    <div class="spine" id="spine"></div>
+    <div>
+      <div class="term">
+        <div class="tbar">
+          <span class="b b1"></span><span class="b b2"></span><span class="b b3"></span>
+          <span class="name">agent — live</span>
+          <span class="prog" id="prog">0 / 0</span>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="replay">▶ Replay</button>
+    <button class="ghost" id="skip">Skip to end</button>
+  </div>
+
+  <div class="legend" id="legend"></div>
+  <p class="foot">Generated from out/debug.jsonl · account &amp; key values redacted</p>
+</div>
+
+<script>
+const ICON={
+  ok:'<path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  skip:'<path d="M4 4l5 4-5 4zM10 4v8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/>',
+  ai:'<rect x="3.3" y="5" width="9.4" height="7" rx="1.7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.3V5M5.4 8.5h.01M10.6 8.5h.01" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  warn:'<path d="M8 2.4L14.6 13.6H1.4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.4v3M8 11.4h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  err:'<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  key:'<circle cx="6" cy="6" r="3.1" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.3 8.3L13 13m-2-2l1.3-1.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
+};
+const COL={ok:'var(--ok)',skip:'var(--skip)',ai:'var(--ai)',warn:'var(--warn)',err:'var(--err)',key:'var(--key)'};
+
+// fixed backbone (english)
+const SPINE=[["ARRIVO","Open page"],["COOKIE","Cookie banner"],["ENTRY","Find signup"],
+  ["GOOGLE","Google login"],["FORM","Onboarding form"],["VERIFICA","Email verify"],
+  ["ONBOARD","Skip onboarding"],["KEY","API key"],["AI","AI fallback"],["ESITO","Outcome"]];
+const STAGE_EN={ARRIVO:"Open page",COOKIE:"Cookie banner",ENTRY:"Find signup",GOOGLE:"Google login",
+  FORM:"Onboarding form",VERIFICA:"Email verify",ONBOARD:"Skip onboarding",KEY:"API key",
+  CHIAVI:"API key",AI:"AI fallback",ESITO:"Outcome"};
+const OUT_EN={"pagina aperta":"page opened","rifiutato":"rejected","click":"clicked",
+  "assente":"none","bottone cliccato":"button clicked","usa altro account":"use another account",
+  "digito email":"type email","digito password":"type password","non necessaria":"not required",
+  "niente da saltare":"nothing to skip","non ottenuta":"not found yet","compilato":"filled",
+  "submit assente":"no submit button","non trovata in automatico":"not found automatically",
+  "in campo":"engaged","azione ripetuta":"repeated action","nessuna chiave":"no key"};
+
+// real run data (redacted)
+const STEPS=[
+ {stage:"ARRIVO",outcome:"pagina aperta",kind:"ok",detail:"auth.tokenfactory.nebius.com"},
+ {stage:"COOKIE",outcome:"rifiutato",kind:"ok",detail:"matched: allow all"},
+ {stage:"ENTRY",outcome:"click",kind:"ok",detail:"signup: 'get started with google'"},
+ {stage:"COOKIE",outcome:"assente",kind:"skip",detail:""},
+ {stage:"GOOGLE",outcome:"bottone cliccato",kind:"ok",detail:""},
+ {stage:"GOOGLE",outcome:"usa altro account",kind:"ok",detail:"Use another account"},
+ {stage:"GOOGLE",outcome:"digito email",kind:"ok",detail:"you@example.com"},
+ {stage:"GOOGLE",outcome:"digito password",kind:"ok",detail:"••••••••"},
+ {stage:"VERIFICA",outcome:"non necessaria",kind:"skip",detail:"continue"},
+ {stage:"ONBOARD",outcome:"niente da saltare",kind:"skip",detail:"continue"},
+ {stage:"KEY",outcome:"non ottenuta",kind:"ai",detail:"landed on dashboard"},
+ {stage:"FORM",outcome:"compilato",kind:"ok",detail:"name ✓ · consent ✓"},
+ {stage:"FORM",outcome:"submit assente",kind:"warn",detail:"button stayed disabled"},
+ {stage:"CHIAVI",outcome:"non trovata in automatico",kind:"ai",detail:"handing to AI"},
+ {stage:"AI",outcome:"in campo",kind:"ai",detail:"find & copy the API key"},
+ {stage:"AI",outcome:"azione ripetuta",kind:"warn",detail:"loop detected — stop"},
+ {stage:"ESITO",outcome:"nessuna chiave",kind:"err",detail:"honest miss"}
+];
+
+const svg=b=>`<svg viewBox="0 0 16 16" aria-hidden="true">${b}</svg>`;
+const spineEl=document.getElementById('spine');
+const nodeMap={};
+SPINE.forEach(([code,label])=>{
+  const n=document.createElement('div');n.className='node';
+  n.innerHTML=`<span class="dot">${svg(ICON.ok)}</span><span class="lbl">${label}</span>`;
+  spineEl.appendChild(n);nodeMap[code]=n;
+});
+// KEY/CHIAVI share a node; AI too
+nodeMap.CHIAVI=nodeMap.KEY;
+
+const logEl=document.getElementById('log');
+const progEl=document.getElementById('prog');
+const verdictEl=document.getElementById('verdict');
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+let timers=[];
+function clearAll(){timers.forEach(clearTimeout);timers=[];logEl.innerHTML='';verdictEl.className='verdict';verdictEl.innerHTML='';
+  Object.values(nodeMap).forEach(n=>n.className='node');}
+
+function lightNode(code,kind){
+  const n=nodeMap[code];if(!n)return;
+  n.style.setProperty('--c',COL[kind]||'var(--ok)');
+  n.classList.add('on','pulse');
+  setTimeout(()=>n.classList.remove('pulse'),700);
+}
+function addLine(s,i,last){
+  const c=COL[s.kind]||'var(--ok)';
+  const stg=STAGE_EN[s.stage]||s.stage;
+  const out=OUT_EN[s.outcome]||s.outcome;
+  const det=s.detail?` <span class="det">— ${s.detail}</span>`:'';
+  const row=document.createElement('div');
+  row.className='ln'+(s.kind==='warn'?' warnrow':'')+(s.kind==='err'?' errrow':'');
+  row.style.setProperty('--c',c);
+  row.innerHTML=`<span class="ic">${svg(ICON[s.kind]||ICON.ok)}</span>`+
+    `<span class="tx"><span class="stg">${stg}</span> · ${out}${det}${last?'':' <span class="cursor"></span>'}</span>`;
+  // remove previous cursor
+  const prev=logEl.querySelector('.cursor');if(prev)prev.remove();
+  logEl.appendChild(row);
+  logEl.scrollTop=logEl.scrollHeight;
+  lightNode(s.stage,s.kind);
+  progEl.textContent=`${i+1} / ${STEPS.length}`;
+}
+function finish(){
+  const ok=false; // this run: no key
+  verdictEl.innerHTML=ok
+    ?`<span class="badge yes">${svg(ICON.key)} Key obtained</span><span class="vtext">saved to out/keys.txt</span>`
+    :`<span class="badge no">${svg(ICON.err)} No key this run</span><span class="vtext">form submit stayed disabled — a React checkbox the agent couldn't unlock. Detected, logged, moved on.</span>`;
+  verdictEl.classList.add('show');
+}
+function play(){
+  clearAll();
+  const step=reduce?0:620;
+  STEPS.forEach((s,i)=>{
+    timers.push(setTimeout(()=>{
+      addLine(s,i,i===STEPS.length-1);
+      if(i===STEPS.length-1)timers.push(setTimeout(finish,reduce?0:500));
+    }, reduce? i*0 : i*step));
+  });
+  if(reduce){STEPS.forEach((s,i)=>addLine(s,i,i===STEPS.length-1));finish();}
+}
+function skip(){clearAll();STEPS.forEach((s,i)=>addLine(s,i,i===STEPS.length-1));finish();}
+
+document.getElementById('replay').onclick=play;
+document.getElementById('skip').onclick=skip;
+
+// legend
+const LEG=[["ok","done"],["skip","skipped"],["ai","AI fallback"],["warn","warning"],["err","error"],["key","key"]];
+document.getElementById('legend').innerHTML=LEG.map(([k,l])=>
+  `<span><i style="background:${COL[k]}"></i>${l}</span>`).join('');
+
+play();
+</script>

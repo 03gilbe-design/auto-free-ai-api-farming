@@ -1,5 +1,14 @@
 # auto-free-ai-api-farming
 
+![Sign up to free AI APIs, harvest the keys](docs/banner.png)
+
+<p align="center">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11+-3776AB?logo=python&logoColor=white">
+  <img alt="Playwright" src="https://img.shields.io/badge/Playwright-2EAD33?logo=playwright&logoColor=white">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-16a34a">
+  <img alt="Providers" src="https://img.shields.io/badge/providers-33-db2777">
+</p>
+
 **Automates signing up for free-tier AI API keys** — Groq, OpenRouter, Cerebras, Mistral,
 Cohere, Fireworks, DeepInfra, and 25+ more. Drives a real (or headless) Chrome/Chromium
 session with Playwright, follows each site's signup flow, extracts the API key, and saves it
@@ -9,11 +18,12 @@ Works on both **English and Italian** UIs — matching uses semantic patterns (a
 role, aria-label, visible text) with layered fallbacks instead of hardcoded exact strings, so
 it degrades gracefully across languages instead of breaking on a locale mismatch.
 
-![Example run: signup path tree, one row per stage, colored by outcome](docs/path-example.png)
+### See it run
 
-*Every run produces a tree like this (`out/path.html`) — which stages were hit, which were
-skipped, and where the AI fallback stepped in. Not the actual providers above; a synthetic
-example for illustration.*
+![The agent farming a key live: terminal log types in each step while the stage backbone lights up](docs/run.gif)
+
+*A real replay (redacted): the agent dismisses the cookie wall, clicks through Google OAuth,
+lands on the key page. Every run also writes a static map to `out/path.html` and opens it.*
 
 ## How it works
 
