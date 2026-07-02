@@ -50,10 +50,11 @@ def _strip(v: str) -> str:
 
 
 def _seed_key() -> str | None:
-    """Optional bootstrap Groq key from env / ~/.env — tried first, keeps old behaviour."""
-    for n in _SEED_NAMES:
-        if os.environ.get(n):
-            return _strip(os.environ[n])
+    """Optional bootstrap Groq key: OS keyring (…/groq_seed) -> env GROQ_KEY -> ~/.env."""
+    from . import secretstore
+    v = secretstore.get("groq_seed", env=_SEED_NAMES)
+    if v:
+        return v
     for f in _SEED_FILES:
         try:
             for ln in f.read_text(encoding="utf-8").splitlines():

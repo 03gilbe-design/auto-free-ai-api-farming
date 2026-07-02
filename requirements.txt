@@ -1,0 +1,2 @@
+playwright>=1.40
+keyring>=24        # optional — stores input secrets in the OS credential store (see README Security)

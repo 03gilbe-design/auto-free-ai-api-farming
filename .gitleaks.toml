@@ -1,0 +1,19 @@
+# gitleaks config — extends the default rules, then allowlists the fake keys used in test
+# fixtures so they don't trip the hook. Real harvested keys live in out/ (gitignored) and never
+# reach a commit; this file just keeps the deliberate placeholders from causing false positives.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures and documented placeholder keys"
+paths = [
+  '''fixtures/.*''',
+  '''docs/.*''',
+]
+regexes = [
+  '''sk-e2e-[A-Za-z0-9]+''',        # e2e_keys.html placeholder
+  '''e2e-REALKEY[0-9A-Za-z]+''',    # obviously-fake demo value
+  '''you@example\.com''',
+  '''primary@example\.com''',
+  '''gsk_•+''',                      # redacted key shown in the demo viewer
+]

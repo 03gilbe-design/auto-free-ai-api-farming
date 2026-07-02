@@ -10,6 +10,15 @@ from __future__ import annotations
 import json, sys, time
 from pathlib import Path
 
+# Windows consoles default to cp1252, which can't encode the emoji/arrow glyphs we print ->
+# UnicodeEncodeError on the first step. Force UTF-8 with errors="replace" so it never crashes,
+# no matter the terminal (PowerShell, cmd, CI). Runs once at import.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 OUT = Path(__file__).parent.parent / "out"
 OUT.mkdir(exist_ok=True)
 _JSONL = OUT / "debug.jsonl"

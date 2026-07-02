@@ -1,0 +1,7 @@
+# Pre-commit hooks. Install once:  pip install pre-commit  &&  pre-commit install
+# After that, every `git commit` is scanned for secrets before it lands (gitleaks, <1s).
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks

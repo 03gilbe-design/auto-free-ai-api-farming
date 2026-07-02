@@ -20,28 +20,18 @@ _FAKE = os.environ.get("OAUTH_FAKE_HOST", "")
 
 
 def _google_pw() -> str | None:
-    """Password Google da ~/.google_pw (GOOGLE_PW=...) o env. Stessa per account_a/account_b.
-    Usata se Google chiede la pw nel popup (prompt=consent / sessione non fresca)."""
-    import os as _os
+    """Google password: OS keyring (auto-free-ai-api-farming/google_pw) -> env GOOGLE_PW ->
+    ~/.google_pw. Used only if Google asks for the password in the popup (stale session)."""
     from pathlib import Path as _P
-    if _os.environ.get("GOOGLE_PW"):
-        return _os.environ["GOOGLE_PW"].strip()
-    try:
-        for ln in (_P.home() / ".google_pw").read_text(encoding="utf-8").splitlines():
-            ln = ln.strip()
-            if ln.startswith("GOOGLE_PW="):
-                v = ln.split("=", 1)[1].strip().strip('"').strip("'")
-                if v and v != "LA_TUA_PASSWORD":  # ignora il placeholder
-                    return v
-            elif ln and "=" not in ln:
-                return ln
-    except Exception:
-        pass
-    # FALLBACK: la password Google e' la STESSA del signup (gia nota, forms.PASSWORD).
-    # Vale per account_a e account_b (stessa password, detto dall'utente). Niente file da gestire.
+    from . import secretstore
+    v = secretstore.get("google_pw", env=("GOOGLE_PW",),
+                        file=_P.home() / ".google_pw", file_key="GOOGLE_PW")
+    if v and v != "LA_TUA_PASSWORD":   # ignore the placeholder
+        return v
+    # FALLBACK: on setups where the Google password equals the signup password.
     try:
         from . import forms
-        return forms.PASSWORD
+        return forms.PASSWORD or None
     except Exception:
         return None
 
@@ -80,6 +70,31 @@ async def _click_button(page) -> bool:
     return await oauth_text.click_login(page, "google", _BTN_SEL, _BTN_TEXT)
 
 
+# Google security checkpoints we must NOT try to defeat — detect and hand back to the human.
+# (2-step verification / device approval / "check your email"). Automating around these would
+# be bypassing a security control; instead we stop with a clear message.
+_2FA_RX = re.compile(
+    r"2-step verification|verifica in due passaggi|check your phone|controlla il tuo telefono|"
+    r"tap yes|tocca s[iì]|approve this sign|verify it'?s you|conferma la tua identit|"
+    r"enter the code|inserisci il codice|2fa|authenticator|check your email|"
+    r"controlla la (tua )?email|an email was sent|abbiamo inviato un'?email", re.I)
+
+
+async def _security_checkpoint(gp) -> str | None:
+    """Return a short reason string if Google is on a 2FA / device-approval / email-verify
+    screen, else None. We stop on these — we don't automate a security challenge."""
+    try:
+        body = (await gp.inner_text("body"))[:2500]
+    except Exception:
+        return None
+    if _2FA_RX.search(body or ""):
+        low = body.lower()
+        if "email" in low and "sent" in low:
+            return "email_verification"
+        return "two_factor"
+    return None
+
+
 async def handle_google_page(gp, email: str, log=None) -> None:
     """Gestisce la pagina Google (chooser/continua-come/consent/auto)."""
     try:
@@ -87,6 +102,15 @@ async def handle_google_page(gp, email: str, log=None) -> None:
     except Exception:
         pass
     await gp.wait_for_timeout(1500)  # il chooser Google carica i tile in ritardo (Cohere)
+    # SECURITY CHECKPOINT: if Google asks for 2FA / device approval / email verification, stop
+    # here and let the human complete it on their phone/inbox — never try to bypass it.
+    chk = await _security_checkpoint(gp)
+    if chk:
+        if log:
+            msg = ("approva l'accesso sul telefono (notifica Google)" if chk == "two_factor"
+                   else "apri la mail e conferma, poi rilancia")
+            log.step("GOOGLE", "verifica di sicurezza", f"{chk}: {msg}", "warn")
+        return
     user = email.split("@")[0]
     chosen = False  # account gia scelto (tile o email digitata) -> non ri-cliccare il testo
     for _ in range(10):  # piu' giri: alcuni flow (Cohere) mostrano il chooser dopo qualche secondo

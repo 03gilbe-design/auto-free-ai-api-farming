@@ -3,7 +3,7 @@
 ![Sign up to free AI APIs, harvest the keys](docs/banner.png)
 
 <p align="center">
-  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11+-3776AB?logo=python&logoColor=white">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10+-3776AB?logo=python&logoColor=white">
   <img alt="Playwright" src="https://img.shields.io/badge/Playwright-2EAD33?logo=playwright&logoColor=white">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-16a34a">
   <img alt="Providers" src="https://img.shields.io/badge/providers-33-db2777">
@@ -64,22 +64,46 @@ long live run — see [Known limitations](#known-limitations).
 ## Quick start
 
 ```bash
-pip install playwright
+pip install -r requirements.txt      # playwright (+ optional keyring)
 playwright install chromium
+```
 
+**Windows PowerShell** — use the launcher, no flags to remember:
+
+```powershell
+.\run.ps1                                    # every site in the registry
+.\run.ps1 Cohere                             # one site
+.\run.ps1 Cohere -Account you@example.com    # pick the account
+.\run.ps1 Cohere -Profile secondary          # use a second Chrome sub-profile
+.\run.ps1 -Headless                          # no visible window
+```
+
+**macOS / Linux (or plain Python anywhere):**
+
+```bash
 export SIGNUP_ACCOUNT="you@example.com"
-export SIGNUP_PASSWORD="something-strong"
 export SIGNUP_NAME="API Bot"
-export GROQ_KEY="..."          # only needed for the AI fallback tier
-
 python run.py                  # runs every site in data/sites.json + data/sites_extra.json
 python run.py Cohere           # runs a single site
+```
+
+Credentials come from the OS keyring first, then env vars — nothing sensitive has to live in
+your shell history (see [Security](#security)):
+
+```bash
+keyring set auto-free-ai-api-farming signup_password   # the signup-form password
+keyring set auto-free-ai-api-farming google_pw         # only if Google asks for it
+keyring set auto-free-ai-api-farming groq_seed         # optional seed key for the first run
 ```
 
 Collected keys are written to `out/keys.txt`. When the run finishes it **generates
 `out/path.html` and opens it in your browser automatically** — the visual map shown above, one
 per run, so you can see exactly what the agent did on each site (set `SIGNUP_NO_MAP=1` to skip
 the auto-open, or regenerate any time with `python tools/path_viewer.py`).
+
+> **Two-factor / device approval:** if Google asks you to approve the sign-in on your phone or
+> to check your email, the tool **stops and tells you** — it never tries to defeat a 2FA or
+> email-verification challenge. Approve it yourself, then re-run.
 
 ## Project layout
 
@@ -152,10 +176,17 @@ passed to the LLM — useful for diagnosing why the AI fallback stalled on a giv
 
 Be aware of what this handles and where data goes:
 
-- **Secrets are stored in plaintext, locally.** Harvested keys (`out/keys.txt`), the learned
-  recipes, and the optional Google password (`~/.google_pw`) are unencrypted files. They are
-  `.gitignore`d so they never reach the repo, but anyone with access to your disk can read
-  them. Don't run this on a shared machine.
+- **Input secrets prefer the OS keyring.** The signup password, Google password, and seed key
+  are read from the OS credential store first (`keyring set auto-free-ai-api-farming <name>`),
+  then env vars, then a dotfile — so no real credential has to sit in your shell history or a
+  plaintext file. Install `keyring` (in `requirements.txt`) to enable it.
+- **Harvested keys are still written in plaintext** to `out/keys.txt` (that's the point — you
+  export them to another project), and the learned recipes live in `out/` too. Everything in
+  `out/`, any `chrome_profile*/`, and `~/.google_pw` is `.gitignore`d so it never reaches the
+  repo — but anyone with disk access can read it. Don't run this on a shared machine.
+- **A pre-commit secret scanner is included.** `pip install pre-commit && pre-commit install`
+  runs [gitleaks](https://github.com/gitleaks/gitleaks) on every commit and blocks it if a real
+  key slips in (test placeholders are allowlisted in `.gitleaks.toml`).
 - **Page content goes to third-party LLMs.** The AI fallback sends a compact text (or a
   screenshot) of the current page to whichever provider key is active. The account **password
   is never included** in the prompt — the deterministic form filler types it locally. Your

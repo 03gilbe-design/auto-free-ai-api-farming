@@ -5,8 +5,14 @@ from __future__ import annotations
 import os, re
 
 # Active account, set via env vars (multi-account collection). No personal defaults ship here.
+# The signup password prefers the OS keyring (auto-free-ai-api-farming/signup_password), then
+# SIGNUP_PASSWORD, then a placeholder — so no real credential needs to live in the environment.
 EMAIL = os.environ.get("SIGNUP_ACCOUNT", "you@example.com")
-PASSWORD = os.environ.get("SIGNUP_PASSWORD", "ChangeMe2026!Farm")
+try:
+    from . import secretstore as _ss
+    PASSWORD = _ss.get("signup_password", env=("SIGNUP_PASSWORD",)) or "ChangeMe2026!Farm"
+except Exception:
+    PASSWORD = os.environ.get("SIGNUP_PASSWORD", "ChangeMe2026!Farm")
 NAME = os.environ.get("SIGNUP_NAME", "API Bot")   # pseudonym used on signup forms
 
 _FIRST_PW_DONE = "_pw_done"
