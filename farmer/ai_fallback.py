@@ -1,9 +1,11 @@
-"""AI fallback text-only (Groq llama-4-scout). NO vision, NO screenshot.
-Usa page_to_text -> LLM sceglie 1 azione -> esegue -> ripete. Mai fermarsi: AI sempre disponibile.
+"""AI fallback (text-first, vision as last resort). page_to_text -> LLM picks 1 action -> exec.
 
-Azioni JSON: {"action":"click","text":"..."} | {"fill","selector"/"placeholder","value"}
-            | {"goto","url"} | {"done"} | {"giveup"}
-Degrada a no-op se manca GROQ_KEY o rete giù (ritorna {"done":False,"reason":"ai_unavailable"}).
+Runs on the self-harvested key pool (farmer/keypool.py): any OpenAI-compatible key the tool
+already grabbed powers the fallback, rotating on rate-limit. An optional GROQ_KEY seeds the
+first run. No LLM key available -> no-op ({"done":False,"reason":"ai_unavailable"}).
+
+SECURITY: the account password is never put in the LLM prompt — the deterministic form filler
+(forms.py) types it locally; the model is told to use an empty value for password fields.
 """
 from __future__ import annotations
 import base64, json, os, re, time, urllib.request, urllib.error
@@ -74,7 +76,7 @@ async def _vision_rescue(page, goal: str, log=None) -> dict:
         if log: log.dbg("vision screenshot fail", err=str(e))
         return {"done": False, "reason": "vision_no_shot"}
     b64 = base64.b64encode(png).decode()
-    prompt = (_SYS_VISION.format(goal=goal, acct=forms.EMAIL, pw=forms.PASSWORD, nm=forms.NAME))
+    prompt = (_SYS_VISION.format(goal=goal, acct=forms.EMAIL, nm=forms.NAME))
     act = _ask_vision(prompt, b64, log=log)
     if not act:
         if log: log.step("VISION", "no risposta", "", "warn")
@@ -119,10 +121,11 @@ def _parse(txt: str) -> dict | None:
 def _ask(prompt: str, log=None) -> dict | None:
     """Text-only ask over the self-harvested key pool (rotates on rate-limit/invalid)."""
     return _ask_pool([{"role": "user", "content": prompt}], vision=False, log=log)
-    return None
 
 
-_SYS = """Sei un agente che automatizza signup per API key gratuite. Account Google: {acct}, password {pw}, nome {nm}.
+_SYS = """Sei un agente che automatizza signup per API key gratuite. Account: {acct}, nome {nm}.
+La password NON ti viene fornita e la inserisce il codice in automatico: se serve compilare un
+campo password usa value "" (stringa vuota); NON inventare ne' scrivere mai una password.
 Goal: {goal}
 Pagina corrente (testo compatto, [X]=bottone <X>=link *X*=campo V-X-V=tendina):
 {page}
@@ -137,7 +140,9 @@ REGOLE: usa SOLO testo che vedi ELENCATO sopra; NON inventare bottoni assenti. S
 bottone Google nella lista, NON scriverlo: compila il modulo email/password presente o cerca il
 campo email per ricevere un token. Google solo se compare davvero. Mai cookie/privacy/social."""
 
-_SYS_VISION = """Sei un agente che automatizza signup per API key gratuite. Account Google: {acct}, password {pw}, nome {nm}.
+_SYS_VISION = """Sei un agente che automatizza signup per API key gratuite. Account: {acct}, nome {nm}.
+La password NON ti viene fornita (la inserisce il codice): per un campo password usa value "";
+NON scrivere mai una password.
 Goal: {goal}
 GUARDA lo SCREENSHOT della pagina e scegli UNA azione. Usa il testo VISIBILE dei bottoni/link.
 Rispondi SOLO JSON:
@@ -290,7 +295,7 @@ async def ai_step(page, goal: str, max_steps: int = 12, log=None, deadline_s: fl
         # DEBUG: salva cosa VEDE l'AI (page2text), non solo l'azione scelta. Cosi' si capisce
         # se l'AI allucina (bottone inesistente) o se page2text rende male la pagina.
         if log: log.dbg("ai vede", step=i, page=page_txt)
-        act = _ask(_SYS.format(goal=goal, page=page_txt, acct=forms.EMAIL, pw=forms.PASSWORD, nm=forms.NAME), log=log)
+        act = _ask(_SYS.format(goal=goal, page=page_txt, acct=forms.EMAIL, nm=forms.NAME), log=log)
         if not act:
             if log: log.step("AI", "no risposta", f"step {i}", "warn")
             return {"done": False, "reason": "ai_no_reply"}

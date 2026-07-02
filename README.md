@@ -148,6 +148,27 @@ passed to the LLM — useful for diagnosing why the AI fallback stalled on a giv
 - Sites change their UI regularly; a selector or regex in `data/sites.json` going stale is
   expected maintenance, not a design flaw.
 
+## Security
+
+Be aware of what this handles and where data goes:
+
+- **Secrets are stored in plaintext, locally.** Harvested keys (`out/keys.txt`), the learned
+  recipes, and the optional Google password (`~/.google_pw`) are unencrypted files. They are
+  `.gitignore`d so they never reach the repo, but anyone with access to your disk can read
+  them. Don't run this on a shared machine.
+- **Page content goes to third-party LLMs.** The AI fallback sends a compact text (or a
+  screenshot) of the current page to whichever provider key is active. The account **password
+  is never included** in the prompt — the deterministic form filler types it locally. Your
+  account **email** and visible page text are sent, so don't point the AI fallback at pages
+  with data you wouldn't share with an LLM provider.
+- **Prompt-injection surface.** The LLM's chosen action (click / fill / goto) is executed. A
+  malicious or compromised page could try to steer the agent. Only run it against providers you
+  trust and chose yourself — it never discovers sites on its own.
+- **Clipboard is read** when grabbing a masked key (`navigator.clipboard.readText()`), so it
+  can pick up whatever else is on your clipboard at that moment.
+- **The Chrome profile holds a live Google session** on disk. Treat that directory like a
+  credential.
+
 ## Ethics / ToS note
 
 This automates account creation and API key retrieval. Only use it with accounts you own, and
