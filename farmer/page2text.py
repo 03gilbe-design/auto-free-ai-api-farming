@@ -3,7 +3,11 @@
 Notazione (richiesta utente):
   [Testo]            bottone
   <Testo>            link
-  *Placeholder*(t)   campo input, t = tipo (email/password/text/tel...)
+  *Placeholder*(t)   campo input VUOTO, t = tipo (email/password/text/tel...)
+  *Placeholder="X"*(t) campo GIA' RIEMPITO col valore X (mai mostrato per password) — segnale
+                     di progresso: senza questo un fill riuscito sembra "non aver fatto niente"
+                     al prossimo giro (il placeholder statico non cambia da solo), e l'AI
+                     ripete lo stesso fill all'infinito finche' il loop-guard non arrende tutto
   [____](t)          campo input senza placeholder
   V-Label-V          tendina/select (opzioni elencate se poche)
   [ ] Label          checkbox vuoto      [x] Label  spuntato
@@ -133,10 +137,15 @@ _JS_EXTRACT = r"""
       if (ty === 'checkbox') { out.push({k:'check', t: labelFor(el) || el.name || '', ck: el.checked, ref: _mkref(el)}); continue; }
       if (ty === 'radio')    { out.push({k:'radio', t: labelFor(el) || el.value || '', ck: el.checked, ref: _mkref(el)}); continue; }
       if (ty === 'submit' || ty === 'button') { out.push({k:'btn', t: el.value || t || 'Invia', ref: _mkref(el)}); continue; }
-      out.push({k:'field', t: el.placeholder || el.getAttribute('aria-label') || el.name || '', ty: ty, ref: _mkref(el)});
+      // val = valore GIA' digitato (mai per password): senza questo, un campo appena riempito
+      // appare IDENTICO al prossimo snapshot (si mostra il placeholder statico, non il valore),
+      // l'AI non vede il progresso e ri-compila lo stesso campo all'infinito -> loop-guard ->
+      // giveup anche se il fill era riuscito (visto live su Cohere: "About You" -> First name).
+      const fval = (ty !== 'password' && el.value) ? el.value.slice(0,40) : '';
+      out.push({k:'field', t: el.placeholder || el.getAttribute('aria-label') || el.name || '', ty: ty, val: fval, ref: _mkref(el)});
       continue;
     }
-    if (tag === 'textarea') { out.push({k:'field', t: el.placeholder || el.name || '', ty:'area', ref: _mkref(el)}); continue; }
+    if (tag === 'textarea') { const tval = el.value ? el.value.slice(0,40) : ''; out.push({k:'field', t: el.placeholder || el.name || '', ty:'area', val: tval, ref: _mkref(el)}); continue; }
     if (tag === 'select') {
       const opts = [...el.options].map(o => o.text.trim()).filter(Boolean).slice(0,6);
       out.push({k:'select', t: el.getAttribute('aria-label') || el.name || '', opt: opts, ref: _mkref(el)}); continue;
@@ -200,7 +209,13 @@ def _fmt(n: dict) -> str | None:
         return f"<{t}>{_ref_tag(n)}" if t else None
     if k == "field":
         ty = n.get("ty", "text")
-        body = f"*{t}*" if t else "[____]"
+        val = (n.get("val") or "").strip()
+        if val:
+            # mostra il valore GIA' scritto: senza questo l'AI non vede il proprio progresso
+            # (il placeholder statico non cambia dopo un fill) e ripete lo stesso fill in loop.
+            body = f"*{t}=\"{val}\"*" if t else f"*=\"{val}\"*"
+        else:
+            body = f"*{t}*" if t else "[____]"
         return f"{body}({ty}){_ref_tag(n)}"
     if k == "select":
         opts = n.get("opt") or []

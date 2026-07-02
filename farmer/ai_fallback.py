@@ -127,7 +127,9 @@ _SYS = """Sei un agente che automatizza signup per API key gratuite. Account: {a
 La password NON ti viene fornita e la inserisce il codice in automatico: se serve compilare un
 campo password usa value "" (stringa vuota); NON inventare ne' scrivere mai una password.
 Goal: {goal}
-Pagina corrente (testo compatto, [X]=bottone <X>=link *X*=campo V-X-V=tendina, {{ref:eN}}=id stabile):
+Pagina corrente (testo compatto, [X]=bottone <X>=link *X*=campo VUOTO *X="v"*=campo GIA'
+riempito col valore v (non ricompilarlo, passa al prossimo campo/bottone) V-X-V=tendina,
+{{ref:eN}}=id stabile):
 {page}
 Rispondi SOLO JSON con UNA azione. Se l'elemento ha un {{ref:eN}} accanto, INCLUDI SEMPRE "ref"
 con quel valore esatto (es. "e3") oltre al testo — e' piu' affidabile del testo da solo:
