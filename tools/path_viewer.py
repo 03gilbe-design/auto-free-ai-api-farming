@@ -104,10 +104,15 @@ def _esc(s):
     return html.escape(str(s or ""))
 
 
-def render():
+def render(live: bool = False):
+    """Render out/path.html from the run's debug.jsonl.
+    live=True adds a 1.5s auto-refresh meta tag so the tree colors in as the run progresses
+    (used by run.py while a run is in flight). Static exports leave it off."""
     sites = _load()
+    refresh = '<meta http-equiv="refresh" content="1.5">' if live else ''
     parts = ["""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+""" + refresh + """
 <title>Signup path tree — auto-free-ai-api-farming</title><style>
 *{box-sizing:border-box}
 body{margin:0;background:#0e1726;color:#e6edf6;font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:16px}

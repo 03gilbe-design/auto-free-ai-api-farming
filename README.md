@@ -25,6 +25,10 @@ example for illustration.*
      └──────────────┘                 └───────────────┘                └────────────────┘
 ```
 
+**[Full decision-flow diagram → `docs/how-it-works.html`](docs/how-it-works.html)** — a
+plain-language, node-by-node walkthrough of `farmer/tree.py`'s `run_site()`, kept in sync with
+the code (every box names the real function it maps to).
+
 1. **Deterministic first** (`farmer/forms.py`, `farmer/grabkey.py`, `farmer/cookies.py`,
    `farmer/oauth_text.py`) — cookie banners, login/signup buttons, Google/GitHub OAuth, and
    the common "create org / accept terms" onboarding form are all handled without AI, via

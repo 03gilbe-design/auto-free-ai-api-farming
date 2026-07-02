@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>How the API-key robot works — plain-language flow</title>
+<style>
+:root{
+  --bg:#f7f5f2;--surface:#fff;--surface2:#f0ede9;--border:#d9d4ce;--border2:#ebe7e2;
+  --text:#1c1917;--text-dim:#78716c;--text-faint:#b5ada6;
+  --step-bg:#1e3a8a;--step-fg:#dbeafe;--step-brd:#1d4ed8;
+  --ok-bg:#f0fdf4;--ok-brd:#16a34a;--ok-fg:#14532d;
+  --warn-bg:#fffbeb;--warn-brd:#d97706;--warn-fg:#78350f;
+  --stop-bg:#fff1f2;--stop-brd:#e11d48;--stop-fg:#881337;
+  --ai-bg:#faf5ff;--ai-brd:#7c3aed;--ai-fg:#3b0764;
+  --mark-bg:#eff6ff;--mark-brd:#2563eb;--mark-fg:#1e3a8a;
+  --opt-bg:#f8f7f5;--opt-brd:#c9c4be;--opt-fg:#57534e;
+  --loop-bg:#fef3c7;--loop-brd:#f59e0b;--loop-fg:#78350f;
+  --jump-bg:#ede9fe;--jump-brd:#8b5cf6;--jump-fg:#4c1d95;
+  --fix-bg:#f0fdfa;--fix-brd:#0d9488;--fix-fg:#134e4a;
+  --data-bg:#fdf2f8;--data-brd:#db2777;--data-fg:#831843;
+  --conn:#d1ccc7;--shadow:0 1px 3px rgba(0,0,0,.05);
+  --font:system-ui,-apple-system,sans-serif;--mono:ui-monospace,monospace;--r:7px;
+}
+.theme-night{--bg:#0b0e18;--surface:#111827;--surface2:#1f2937;--border:#374151;--border2:#1f2937;--text:#f1f5f9;--text-dim:#94a3b8;--text-faint:#475569;--step-fg:#93c5fd;--ok-bg:#052e16;--ok-brd:#15803d;--ok-fg:#86efac;--warn-bg:#1c1300;--warn-brd:#b45309;--warn-fg:#fcd34d;--stop-bg:#1a0505;--stop-brd:#991b1b;--stop-fg:#fca5a5;--ai-bg:#160d2e;--ai-brd:#6d28d9;--ai-fg:#c4b5fd;--mark-bg:#0c1a36;--mark-brd:#2563eb;--mark-fg:#93c5fd;--opt-bg:#111827;--opt-brd:#374151;--opt-fg:#6b7280;--loop-bg:#1c1400;--loop-brd:#b45309;--loop-fg:#fcd34d;--jump-bg:#1e1b3a;--jump-brd:#7c3aed;--jump-fg:#c4b5fd;--fix-bg:#042f2a;--fix-brd:#0d9488;--fix-fg:#5eead4;--data-bg:#2a0a1c;--data-brd:#be185d;--data-fg:#f9a8d4;--conn:#374151}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);padding:26px 22px 48px;font-size:13px;line-height:1.5}
+h1{font-size:1.05rem;font-weight:700;margin-bottom:2px}
+.sub{color:var(--text-faint);font-size:.7rem;margin-bottom:16px}
+#tbtn{position:fixed;top:16px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 11px;cursor:pointer;color:var(--text-dim);font-size:.7rem;z-index:9}
+svg.i{width:1.2em;height:1.2em;flex-shrink:0;vertical-align:-.18em}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;padding:10px 13px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r)}
+.legend span{font-size:.68rem;color:var(--text-dim);display:flex;align-items:center;gap:5px}
+.lg{width:13px;height:13px;border-radius:3px;border:1.5px solid}
+.flow{display:flex;flex-direction:column;align-items:flex-start}
+.vc{width:2px;min-height:13px;background:var(--conn);margin-left:18px}
+.vc.dash{background:repeating-linear-gradient(to bottom,var(--conn) 0,var(--conn) 4px,transparent 4px,transparent 8px)}
+.node{display:flex;align-items:flex-start;gap:9px;padding:8px 13px;border-radius:var(--r);border:1px solid;font-size:.78rem;max-width:760px;background:var(--surface);box-shadow:var(--shadow)}
+.node>svg.i{margin-top:1px}
+.nb{display:flex;flex-direction:column;gap:3px}
+.nt{font-weight:600;color:inherit}.nd{font-size:.72rem;opacity:.85}
+.nd code{font-family:var(--mono);font-size:.92em;background:rgba(125,125,125,.16);padding:0 4px;border-radius:3px}
+.sn{background:rgba(125,125,125,.2);font-size:.6rem;font-weight:800;padding:1px 6px;border-radius:3px;margin-right:5px}
+.n-start{border-color:var(--border);background:var(--surface2);color:var(--text-dim)}
+.n-step{border-color:var(--step-brd);background:var(--step-bg);color:var(--step-fg)}
+.n-ok{border-color:var(--ok-brd);background:var(--ok-bg);color:var(--ok-fg)}
+.n-warn{border-color:var(--warn-brd);background:var(--warn-bg);color:var(--warn-fg)}
+.n-stop{border-color:var(--stop-brd);background:var(--stop-bg);color:var(--stop-fg)}
+.n-ai{border-color:var(--ai-brd);background:var(--ai-bg);color:var(--ai-fg)}
+.n-opt{border-color:var(--opt-brd);background:var(--opt-bg);color:var(--opt-fg);border-style:dashed}
+.n-loop{border-color:var(--loop-brd);background:var(--loop-bg);color:var(--loop-fg)}
+.n-data{border-color:var(--data-brd);background:var(--data-bg);color:var(--data-fg)}
+.n-fix{border-color:var(--fix-brd);background:var(--fix-bg);color:var(--fix-fg)}
+.marker{display:inline-flex;align-items:flex-start;gap:8px;border:1.5px solid var(--mark-brd);background:var(--mark-bg);color:var(--mark-fg);border-radius:var(--r);padding:7px 13px;font-size:.76rem;font-weight:600;box-shadow:var(--shadow);max-width:760px}
+.marker svg.i{margin-top:1px}
+.jump{display:inline-flex;align-items:center;gap:7px;border:1.5px dashed var(--jump-brd);background:var(--jump-bg);color:var(--jump-fg);border-radius:var(--r);padding:6px 12px 6px 9px;font-size:.74rem;font-weight:700;box-shadow:var(--shadow)}
+.jump svg.i{width:1.3em;height:1.3em}
+.bg{display:flex;flex-direction:row;align-items:flex-start;margin-left:18px;flex-wrap:wrap}
+.bc{display:flex;flex-direction:column;align-items:flex-start}
+.bp{height:2px;background:var(--conn);align-self:flex-start;margin-top:18px;min-width:10px}
+.bw{display:flex;flex-direction:column;align-items:flex-start;padding-left:10px}
+.bl{font-size:.64rem;font-style:italic;margin-bottom:3px;color:var(--text-faint)}
+.sites{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 0 18px;max-width:760px}
+.chip{font-size:.66rem;font-weight:700;padding:3px 10px;border-radius:20px;border:1.5px solid}
+.chip.ok{background:var(--ok-bg);border-color:var(--ok-brd);color:var(--ok-fg)}
+.chip.wall{background:var(--stop-bg);border-color:var(--stop-brd);color:var(--stop-fg)}
+.intro{max-width:760px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 15px;margin-bottom:20px;font-size:.8rem;box-shadow:var(--shadow)}
+.intro b{color:var(--text)}
+.intro code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:0 4px;border-radius:3px}
+footer{margin-top:30px;font-size:.68rem;color:var(--text-faint);max-width:760px}
+</style>
+</head>
+<body>
+<button id="tbtn" onclick="tg()">theme</button>
+
+<h1>The robot that signs up to sites and grabs the API key</h1>
+<p class="sub">Plain-language walkthrough · each box = one thing it does, top to bottom · mirrors <code>farmer/tree.py → run_site()</code></p>
+
+<div class="intro">
+<b>What it does, in one line:</b> opens the site, signs in with your Google (or GitHub) account, skips the useless screens, goes to where the API key lives, copies it. If a site has a wall it can't pass (asks for a phone number, wants a credit card, blocks bots), it <b>skips it and records why</b> instead of hammering a dead end.<br>
+<b>Single source of truth:</b> every fact about a site — URL, where the key page is, the key's shape, known walls — lives in one place: <code>data/sites.json</code>. The code always reads from there, so nothing drifts out of sync.
+</div>
+
+<div class="legend">
+  <span><span class="lg" style="background:var(--step-bg);border-color:var(--step-brd)"></span>main step</span>
+  <span><span class="lg" style="background:var(--ok-bg);border-color:var(--ok-brd)"></span>deterministic (no AI)</span>
+  <span><span class="lg" style="background:var(--warn-bg);border-color:var(--warn-brd)"></span>check / action</span>
+  <span><span class="lg" style="background:var(--mark-bg);border-color:var(--mark-brd)"></span>decision (yes/no)</span>
+  <span><span class="lg" style="background:var(--data-bg);border-color:var(--data-brd)"></span>site registry</span>
+  <span><span class="lg" style="background:var(--ai-bg);border-color:var(--ai-brd)"></span>AI fallback</span>
+  <span><span class="lg" style="background:var(--stop-bg);border-color:var(--stop-brd)"></span>stops / skips</span>
+</div>
+
+<div class="flow">
+
+<!-- REGISTRY -->
+<div class="node n-data"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+<div class="nb"><div class="nt">THE SITE REGISTRY — the instruction sheet</div>
+<div class="nd">One row per site in <code>data/sites.json</code> + <code>data/sites_extra.json</code>. It says: the site's <b>URL</b> · <b>where the key page is</b> (<code>key_url</code>) · <b>the key's shape</b> (<code>key_re</code>, so it can recognise it) · <b>is there a known wall?</b> (<code>automatable</code> / <code>wall</code>). The code always reads from here — one source, no conflicting copies.</div></div></div>
+<div class="vc"></div>
+
+<!-- loop per site -->
+<div class="node n-step"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9V3z"/></svg>
+<div class="nb"><div class="nt">START · takes the sites one at a time</div>
+<div class="nd">If you dropped an <code>out/STOP</code> file, it stops <i>before</i> the next site (never mid-site). If a site <b>already produced a key</b> for this account on an earlier run, it skips it — never redoes a site+account pair already in <code>out/keys.txt</code>.</div></div></div>
+<div class="vc"></div>
+
+<!-- KNOWN WALL? -->
+<div class="marker"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+<div class="nb"><div class="nt">DECISION · does the registry mark this site as un-automatable?</div>
+<div class="nd">Read straight from <code>sites.json</code> (<code>registry.automatable()</code>). If yes → <b>skip immediately and record the wall</b> (e.g. "blocks bots"). It never bangs against a known wall — even if you asked for that site by name, it tells you "there's a wall" instead of trying in vain.</div></div></div>
+<div class="vc"></div>
+<div class="bg">
+  <div class="bc"><div class="bw"><div class="bl">YES — known wall (e.g. HuggingFace)</div>
+    <div class="node n-stop"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    <div class="nb"><div class="nt">skip, record why, move to next site</div>
+    <div class="nd"><code>status: "wall"</code> with the reason. HuggingFace silently blocks bots; the only ways left are a password-reset via email in a clean session, or a real password you supply.</div></div></div>
+  </div></div>
+  <div class="bp"></div>
+  <div class="bc"><div class="bw"><div class="bl">NO — automatable → continue</div>
+    <div class="node n-ok"><div class="nb"><div class="nt">the real flow for that site begins ↓</div></div></div>
+  </div></div>
+</div>
+<div class="vc"></div>
+
+<!-- OPEN -->
+<div class="node n-start"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M10 8l5 4-5 4z" fill="currentColor" stroke="none"/></svg>
+<div class="nb"><div class="nt">OPEN the site</div>
+<div class="nd">The Chrome profile is already signed into your Google account → it often lands logged-in with no work. (Multi-account: an optional sign-out first forces Google's account chooser.)</div></div></div>
+<div class="vc"></div>
+
+<!-- COOKIE -->
+<div class="node n-step"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="14" cy="11" r="1" fill="currentColor"/><circle cx="10" cy="15" r="1" fill="currentColor"/></svg>
+<div class="nb"><div class="nt"><span class="sn">1</span>DISMISS the cookie banner</div>
+<div class="nd"><code>cookies.dismiss()</code> — clicks "Reject" using known CMP selectors, with a semantic text fallback (reject/decline/necessary only). Careful not to mis-click a trap (an early bug clicked "Bookmark"; fixed).</div></div></div>
+<div class="vc"></div>
+
+<!-- GITHUB EARLY BRANCH (new) -->
+<div class="node n-fix"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-1-2.6c3.4-.4 7-1.7 7-7.6a5.9 5.9 0 0 0-1.6-4.1 5.5 5.5 0 0 0-.1-4.1s-1.3-.4-4.3 1.6a14.8 14.8 0 0 0-8 0C6 1.3 4.7 1.7 4.7 1.7a5.5 5.5 0 0 0-.1 4.1A5.9 5.9 0 0 0 3 9.9c0 5.9 3.6 7.2 7 7.6a3.4 3.4 0 0 0-1 2.6V22"/></svg>
+<div class="nb"><div class="nt">NEW · early "Continue with GitHub" branch</div>
+<div class="nd">For sites that sign in via GitHub (declared <code>via_github</code>) it tries the GitHub button right away — waits for the SPA to render it, and if it's not on the landing page, navigates to the auth page (via <code>Log in</code>) and retries. If it lands, skip signup and go straight to the key page.</div></div></div>
+<div class="vc"></div>
+
+<!-- already in key area? -->
+<div class="marker"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+<div class="nb"><div class="nt">DECISION · am I already on the key page?</div>
+<div class="nd"><code>_is_key_area()</code>: if the URL mentions keys/dashboard <b>and</b> the body talks about "API key / create key" (positive signals win, even if the header still shows "Log in" — that false-negative used to loop on Nebius) → already in → <b>skip all of signup, jump to step 6</b>.</div></div></div>
+<div class="vc"></div>
+
+<!-- ENTRY -->
+<div class="node n-step"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>
+<div class="nb"><div class="nt"><span class="sn">2</span>FIND the signup entry</div>
+<div class="nd"><code>links.find_and_click("signup")</code>; if there's no "Sign up", try "Sign in" (on many sites signing in with Google = registering). Nothing found → ask the AI. Avoids trap links (blog, docs, pricing, social).</div></div></div>
+<div class="vc"></div>
+
+<!-- ACCESSO -->
+<div class="node n-step"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 16-4 16 0"/></svg>
+<div class="nb"><div class="nt"><span class="sn">3</span>SIGN IN (three routes)</div></div></div>
+<div class="vc"></div>
+<div class="bg">
+  <div class="bc"><div class="bw"><div class="bl">Route A — Google button (preferred)</div>
+    <div class="node n-ok"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+    <div class="nb"><div class="nt">"Continue with Google" → pick your account → "Allow"</div>
+    <div class="nd"><code>google_oauth.signup_with_google()</code> then a settle loop: while still on a Google host, <code>handle_google_page()</code> types the email, the password (from <code>~/.google_pw</code>), and clicks the consent.</div></div></div>
+  </div></div>
+  <div class="bp"></div>
+  <div class="bc"><div class="bw"><div class="bl">Route B — GitHub button</div>
+    <div class="node n-ok"><div class="nb"><div class="nt"><code>github_oauth.signup_with_github()</code> → tick Terms → Authorize</div>
+    <div class="nd">Tried when Google didn't take and a GitHub button exists.</div></div></div>
+  </div></div>
+  <div class="bp"></div>
+  <div class="bc"><div class="bw"><div class="bl">Route C — email/password form (no OAuth)</div>
+    <div class="marker"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3.08 4.18 2 2 0 0 1 5 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L9 10"/><path d="M2 2l20 20"/></svg>
+    <div class="nb"><div class="nt">DECISION · does it ask for a phone number?</div>
+    <div class="nd"><b>Hard rule: yes → drop the site</b> (<code>forms.has_phone()</code> → <code>no_key</code>). Phone can't be automated. Re-checked again after submitting the form.</div></div></div>
+    <div class="vc"></div>
+    <div class="node n-warn"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg>
+    <div class="nb"><div class="nt"><code>forms.fill_form()</code> + submit</div>
+    <div class="nd">Fills email/password/name into the right fields only. If it stalls → hands to the AI.</div></div></div>
+  </div></div>
+</div>
+<div class="vc"></div>
+
+<!-- VERIFY -->
+<div class="node n-opt"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+<div class="nb"><div class="nt"><span class="sn">4</span>EMAIL verification <span style="font-weight:400;opacity:.7">(only if the site asks)</span></div>
+<div class="nd">If you signed in with Google it's already verified → skipped. Otherwise, if the page says "check your email", the AI tries to click the confirmation link.</div></div></div>
+<div class="vc dash"></div>
+
+<!-- ONBOARDING -->
+<div class="node n-step"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h12M4 18h8"/></svg>
+<div class="nb"><div class="nt"><span class="sn">5</span>SKIP the welcome screens</div>
+<div class="nd">Up to 4 rounds of clicking "Skip / Maybe later / Not now / No thanks" on useless intro prompts. None there → move on.</div></div></div>
+<div class="vc"></div>
+
+<!-- KEY -->
+<div class="node n-step"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 5l3 3M14 8l3 3"/></svg>
+<div class="nb"><div class="nt"><span class="sn">6</span>GET the key</div>
+<div class="nd">Navigate to the key page (<code>key_url</code> from the registry) and dismiss any cookie banner there too.</div></div></div>
+<div class="vc"></div>
+<div class="bg">
+  <div class="bc"><div class="bw"><div class="bl">redirected to onboarding</div>
+    <div class="node n-ok"><div class="nb"><div class="nt">click the "API keys" nav item and return ↩</div>
+    <div class="nd">e.g. Cerebras bounces <code>/apikeys → /get-started</code>.</div></div></div></div></div>
+  <div class="bp"></div>
+  <div class="bc"><div class="bw"><div class="bl">bounced to a login wall (session expired)</div>
+    <div class="node n-ai"><div class="nb"><div class="nt">re-auth (GitHub first, else Google), reload the key page ↩</div>
+    <div class="nd">If the Google/GitHub button isn't on the key page (Mistral), it goes to the site's signup URL, logs in there, then comes back.</div></div></div></div></div>
+</div>
+<div class="vc"></div>
+
+<!-- walls on key page -->
+<div class="bg">
+  <div class="bc"><div class="bw"><div class="bl">OAuth refused (bot detection)</div>
+    <div class="node n-stop"><div class="nb"><div class="nt">URL comes back <code>?error=OAuthCallback</code> → skip, <code>oauth_blocked</code></div>
+    <div class="nd">e.g. Nscale. Detected automatically, no AI wasted.</div></div></div></div></div>
+  <div class="bp"></div>
+  <div class="bc"><div class="bw"><div class="bl">credit card required</div>
+    <div class="node n-stop"><div class="nb"><div class="nt"><code>_needs_card()</code> matches "deposit $5 / add payment" → skip, <code>card</code></div>
+    <div class="nd">e.g. TogetherAI. Checked before and after the create-click.</div></div></div></div></div>
+</div>
+<div class="vc"></div>
+
+<div class="node n-ok"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+<div class="nb"><div class="nt"><code>grabkey.grab_key()</code> — how it reads the key, in order:</div>
+<div class="nd"><b>1)</b> is it already shown in plain text? (recognised by <code>key_re</code>) → taken, done.<br><b>2)</b> is it masked with dots? → click "Copy" and read it from the clipboard.<br><b>3)</b> not there? → click "Create key", name it (<code>_fill_key_name</code>), pick required dropdowns (<code>_select_required</code>), confirm, wait for it to appear, read it.<br><span style="opacity:.7">Each site has a quirk (on Groq the confirm button says "Submit" and sits outside the panel; on Mistral it's inside) — handled in the code.</span></div></div></div>
+<div class="vc"></div>
+
+<!-- new: complete_form + learned + AI -->
+<div class="node n-fix"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M8 13h5"/><path d="M15.5 16.5l1.5 1.5 3-3"/></svg>
+<div class="nb"><div class="nt">NEW · if no key yet → <code>forms.complete_form()</code> (generic, deterministic)</div>
+<div class="nd">Many "walls" are just an onboarding form: it fills email/password/name/<b>organization</b>, ticks the consent checkboxes (scroll-into-view + force, works even on hidden custom checkboxes), and submits (skips a disabled button until consents are ticked). One reusable component, no per-site recipes.</div></div></div>
+<div class="vc"></div>
+<div class="node n-fix"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/><circle cx="12" cy="12" r="3"/></svg>
+<div class="nb"><div class="nt">NEW · <code>learned.py</code> — replay what the AI already solved</div>
+<div class="nd">Every action the AI resolves successfully is saved as a deterministic recipe (page path + element type + action). On later runs those recipes are replayed <b>before</b> calling the AI — zero AI cost, and the system gets more reliable the more sites it touches.</div></div></div>
+<div class="vc"></div>
+<div class="jump"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+<span>still stuck → <code>ai_fallback.ai_step()</code> (time-boxed, loop-detected, vision as last resort) → then re-read the key</span></div>
+<div class="vc"></div>
+
+<!-- SAVE -->
+<div class="node n-step"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+<div class="nb"><div class="nt"><span class="sn">7</span>SAVE the result</div></div></div>
+<div class="vc"></div>
+<div class="bg">
+  <div class="bc"><div class="bw"><div class="bl">has the key</div><div class="node n-ok"><div class="nb"><div class="nt">append to <code>out/keys.txt</code> with <b>which account</b> made it, and when</div></div></div></div></div>
+  <div class="bp"></div>
+  <div class="bc"><div class="bw"><div class="bl">known wall</div><div class="node n-stop"><div class="nb"><div class="nt"><code>status: "wall"</code> + the reason</div></div></div></div></div>
+  <div class="bp"></div>
+  <div class="bc"><div class="bw"><div class="bl">couldn't do it</div><div class="node n-stop"><div class="nb"><div class="nt"><code>status: "no_key"</code></div></div></div></div></div>
+</div>
+<div class="vc"></div>
+<div class="node n-ok"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-6"/></svg>
+<div class="nb"><div class="nt">then run.py renders the live map</div>
+<div class="nd"><code>tools/path_viewer.py</code> writes <code>out/path.html</code> and opens it — the tree colours in green/red/purple as the run advances (auto-refresh), so you can see exactly what happened on each site.</div></div></div>
+
+<!-- multi-account -->
+<div class="vc"></div>
+<div class="node n-data"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+<div class="nb"><div class="nt">MULTI-ACCOUNT — grab the key with a second/third account</div>
+<div class="nd">Set <code>SIGNUP_PROFILE</code> to a separate Chrome sub-profile already signed into another Google account, and <code>SIGNUP_ACCOUNT</code> to match — Google then auto-picks that account, no chooser, no stored passwords. It never redoes a site+account pair already saved.</div></div></div>
+
+<!-- SITES -->
+<div class="vc"></div>
+<div class="node n-data"><div class="nb"><div class="nt">Providers — where they stand</div></div></div>
+<div class="sites">
+  <span class="chip ok">Groq ✓</span><span class="chip ok">OpenRouter ✓</span><span class="chip ok">Cerebras ✓</span>
+  <span class="chip ok">SambaNova ✓</span><span class="chip ok">Cohere ✓</span><span class="chip ok">Mistral ✓</span>
+  <span class="chip ok">FireworksAI ✓</span><span class="chip ok">Google AI Studio ✓</span><span class="chip ok">NovitaAI ✓</span>
+  <span class="chip wall">HuggingFace ✗ silently blocks bots</span>
+  <span class="chip wall">LLM7 ✗ GitHub/Discord only</span>
+  <span class="chip wall">AI21 ✗ Google re-asks password</span>
+  <span class="chip wall">Glhf ✗ server down (522)</span>
+  <span class="chip wall">Cloudflare ✗ scoped token</span>
+  <span class="chip wall">TogetherAI ✗ card / $5 deposit</span>
+  <span class="chip wall">Nscale ✗ OAuth refused</span>
+  <span class="chip wall">DeepSeek / DeepInfra ✗ paid, no free tier</span>
+</div>
+
+<!-- PATTERN -->
+<div class="vc"></div>
+<div class="node n-warn"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+<div class="nb"><div class="nt">THE PATTERN: where the code wins and where it can't</div>
+<div class="nd"><b>WINS</b> when a site has "Continue with Google" (or GitHub) and shows the account chooser. <b>Can't pass</b> when the wall is external, not a code bug: a phone number, a credit card, a scoped-token-only flow (Cloudflare), a re-asked password (AI21), a down server (Glhf), or a silent bot block (HuggingFace). These are recorded with their reason rather than retried in vain. The remaining hard case is a few React-controlled custom onboarding forms where a hidden checkbox resists automation.</div></div></div>
+
+</div><!-- /flow -->
+
+<footer>The deterministic path (steps 1–6) handles most sites end-to-end; <code>forms.complete_form</code> and the <code>learned.py</code> replay reduce how often the AI is needed. Free-tier keys are obtained for 9 providers (×3 accounts = your vault). The failing providers all hit an <b>external</b> wall, not a code error. Mirrors the current <code>farmer/tree.py</code>; regenerate the run map with <code>python tools/path_viewer.py</code>.</footer>
+
+<script>
+let d=localStorage.getItem('hiw')==='1';
+function ap(){document.body.className=d?'theme-night':'';document.getElementById('tbtn').textContent=d?'theme ☼':'theme ☾';}
+function tg(){d=!d;localStorage.setItem('hiw',d?'1':'0');ap();}
+ap();
+</script>
+</body>
+</html>
