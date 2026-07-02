@@ -50,10 +50,16 @@ the code (every box names the real function it maps to).
 3. **Learns from the AI** (`farmer/learned.py`) — any action the AI resolves successfully is
    recorded as a deterministic "recipe" (page path + element type + action). Future runs
    replay the recipe first, skipping the AI call entirely.
+4. **Runs on the keys it harvests** (`farmer/keypool.py`) — the AI fallback doesn't need a
+   pre-provisioned key. The first providers are solved with no LLM at all (steps 1 & 3), and
+   the OpenAI-compatible keys they yield (Groq, Cerebras, OpenRouter, …) feed the fallback on
+   later runs, rotating on rate-limit. An optional `GROQ_KEY` seeds the very first run; after
+   that it's self-sustaining. *(A short "auto AI sign-up loop": harvest → power the agent →
+   harvest more.)*
 
-**Status:** functional core (steps 1–2 work end-to-end on most sites), step 3 (learned
-recipes) is implemented and unit-tested but not yet proven on a full live run — see
-[Known limitations](#known-limitations).
+**Status:** functional core (steps 1–2 work end-to-end on most sites); steps 3–4 (learned
+recipes, self-harvested key pool) are implemented and unit-tested but not yet proven over a
+long live run — see [Known limitations](#known-limitations).
 
 ## Quick start
 

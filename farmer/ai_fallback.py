@@ -9,68 +9,63 @@ from __future__ import annotations
 import base64, json, os, re, time, urllib.request, urllib.error
 from pathlib import Path
 from .page2text import page_to_text_all_frames
-from . import forms
-
-MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"  # multimodale: accetta anche immagini
-# file dove puo stare la key, in ordine di priorita
-_KEYFILES = [Path.home() / ".tiktok_keys", Path.home() / ".env"]
-_KEYNAMES = ("GROQ_KEY", "GROQ_API_KEY")
+from . import forms, keypool
 
 
-def _strip(v: str) -> str:
-    return v.strip().strip('"').strip("'").strip()
+def _post(base: str, model: str, key: str, messages: list, timeout: int = 30) -> dict | None:
+    """One OpenAI-compatible chat call. Returns parsed dict, or raises on HTTP error so the
+    caller can decide whether to rotate to the next key."""
+    body = json.dumps({
+        "model": model, "messages": messages,
+        "temperature": 0, "max_tokens": 200,
+        "response_format": {"type": "json_object"},
+    }).encode()
+    # UA Mozilla obbligatorio: senza, alcuni provider (Cloudflare front) rispondono 403 err 1010
+    req = urllib.request.Request(base, data=body,
+                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                                          "User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        data = json.loads(r.read())
+    return _parse(data["choices"][0]["message"]["content"])
 
 
-def _groq_key() -> str | None:
-    for n in _KEYNAMES:
-        if os.environ.get(n):
-            return _strip(os.environ[n])
-    for f in _KEYFILES:
-        try:
-            for ln in f.read_text(encoding="utf-8").splitlines():
-                ln = ln.strip()
-                if ln.startswith("export "):
-                    ln = ln[7:]
-                for n in _KEYNAMES:
-                    if ln.startswith(n + "="):
-                        return _strip(ln.split("=", 1)[1])
-        except Exception:
-            continue
+def _ask_pool(messages: list, vision: bool = False, log=None) -> dict | None:
+    """Ask the LLM using the SELF-HARVESTED key pool, rotating on failure.
+    401/403 = dead key -> next provider. 429/5xx = rate/transient -> one backoff then next."""
+    pool = keypool.clients(vision=vision)
+    if not pool:
+        return None
+    for base, model, key, prov in pool:
+        for attempt in range(2):
+            try:
+                out = _post(base, model, key, messages, timeout=40 if vision else 30)
+                if out is not None:
+                    if log and prov != "groq":
+                        log.dbg("ai via harvested key", provider=prov)
+                    return out
+                break  # empty parse -> try next provider
+            except urllib.error.HTTPError as e:
+                if e.code in (401, 403):
+                    break  # dead/invalid key -> next provider immediately
+                if e.code == 429 or e.code >= 500:
+                    time.sleep(1.5 * (attempt + 1)); continue
+                break
+            except Exception:
+                time.sleep(1.0 * (attempt + 1)); continue
     return None
 
 
-def _ask_vision(prompt: str, png_b64: str, key: str, retries: int = 2) -> dict | None:
-    """Stesso _ask ma con SCREENSHOT allegato (llama-4-scout e' multimodale).
-    Usato come ULTIMO tier quando il navigatore testuale si arrende: la vista
-    coglie bottoni/stati che page2text non rende (canvas, icone, layout)."""
+def _ask_vision(prompt: str, png_b64: str, retries: int = 2, log=None) -> dict | None:
+    """Vision tier: attach the screenshot (only vision-capable pool keys are used).
+    Rotates over the pool like _ask; None if no vision-capable key is available."""
     content = [
         {"type": "text", "text": prompt},
         {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{png_b64}"}},
     ]
-    body = json.dumps({
-        "model": MODEL,
-        "messages": [{"role": "user", "content": content}],
-        "temperature": 0, "max_tokens": 200,
-        "response_format": {"type": "json_object"},
-    }).encode()
-    req = urllib.request.Request("https://api.groq.com/openai/v1/chat/completions", data=body,
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
-                                          "User-Agent": "Mozilla/5.0"})
-    for attempt in range(retries):
-        try:
-            with urllib.request.urlopen(req, timeout=40) as r:
-                data = json.loads(r.read())
-            return _parse(data["choices"][0]["message"]["content"])
-        except urllib.error.HTTPError as e:
-            if e.code == 429 or e.code >= 500:
-                time.sleep(2 * (attempt + 1)); continue
-            return None
-        except Exception:
-            time.sleep(1.5 * (attempt + 1)); continue
-    return None
+    return _ask_pool([{"role": "user", "content": content}], vision=True, log=log)
 
 
-async def _vision_rescue(page, goal: str, key: str, log=None) -> dict:
+async def _vision_rescue(page, goal: str, log=None) -> dict:
     """Un colpo di vista: screenshot -> llama-4-scout multimodale -> 1 azione -> esegui.
     Tier finale; non un loop (la vista costa). done/giveup/azione singola."""
     try:
@@ -80,7 +75,7 @@ async def _vision_rescue(page, goal: str, key: str, log=None) -> dict:
         return {"done": False, "reason": "vision_no_shot"}
     b64 = base64.b64encode(png).decode()
     prompt = (_SYS_VISION.format(goal=goal, acct=forms.EMAIL, pw=forms.PASSWORD, nm=forms.NAME))
-    act = _ask_vision(prompt, b64, key)
+    act = _ask_vision(prompt, b64, log=log)
     if not act:
         if log: log.step("VISION", "no risposta", "", "warn")
         return {"done": False, "reason": "vision_no_reply"}
@@ -121,32 +116,9 @@ def _parse(txt: str) -> dict | None:
     return None
 
 
-def _ask(prompt: str, key: str, retries: int = 3) -> dict | None:
-    body = json.dumps({
-        "model": MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0, "max_tokens": 200,
-        "response_format": {"type": "json_object"},
-    }).encode()
-    # UA Mozilla obbligatorio: senza, Cloudflare risponde 403 err 1010
-    req = urllib.request.Request("https://api.groq.com/openai/v1/chat/completions", data=body,
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
-                                          "User-Agent": "Mozilla/5.0"})
-    for attempt in range(retries):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                data = json.loads(r.read())
-            return _parse(data["choices"][0]["message"]["content"])
-        except urllib.error.HTTPError as e:
-            # 429 rate limit / 5xx transitori: backoff e ritenta. 4xx restanti: stop.
-            if e.code == 429 or e.code >= 500:
-                time.sleep(2 * (attempt + 1))
-                continue
-            return None
-        except Exception:
-            # rete giu / timeout: ritenta brevemente
-            time.sleep(1.5 * (attempt + 1))
-            continue
+def _ask(prompt: str, log=None) -> dict | None:
+    """Text-only ask over the self-harvested key pool (rotates on rate-limit/invalid)."""
+    return _ask_pool([{"role": "user", "content": prompt}], vision=False, log=log)
     return None
 
 
@@ -287,9 +259,8 @@ async def ai_step(page, goal: str, max_steps: int = 12, log=None, deadline_s: fl
       l'AI sta girando a vuoto -> giveup. (l'utente odiava il "fermo a far niente").
     - max_steps basso (12): un muro non si sblocca con 100 tentativi lenti.
     """
-    key = _groq_key()
-    if not key:
-        if log: log.step("AI", "non disponibile", "no GROQ_KEY", "warn")
+    if not keypool.available():
+        if log: log.step("AI", "non disponibile", "no LLM key (seed GROQ_KEY or harvest one first)", "warn")
         return {"done": False, "reason": "ai_unavailable"}
     if log: log.step("AI", "in campo", goal[:50], "ai")
     t0 = time.time()
@@ -307,7 +278,7 @@ async def ai_step(page, goal: str, max_steps: int = 12, log=None, deadline_s: fl
             if stuck >= 3:
                 if log: log.step("AI", "testo bloccato", "tento la VISTA", "ai")
                 # TIER VISION: il testo non basta -> guarda lo screenshot (1 colpo)
-                v = await _vision_rescue(page, goal, key, log)
+                v = await _vision_rescue(page, goal, log)
                 if v.get("done"):
                     return {"done": True}
                 if v.get("reason") == "vision_acted":
@@ -319,7 +290,7 @@ async def ai_step(page, goal: str, max_steps: int = 12, log=None, deadline_s: fl
         # DEBUG: salva cosa VEDE l'AI (page2text), non solo l'azione scelta. Cosi' si capisce
         # se l'AI allucina (bottone inesistente) o se page2text rende male la pagina.
         if log: log.dbg("ai vede", step=i, page=page_txt)
-        act = _ask(_SYS.format(goal=goal, page=page_txt, acct=forms.EMAIL, pw=forms.PASSWORD, nm=forms.NAME), key)
+        act = _ask(_SYS.format(goal=goal, page=page_txt, acct=forms.EMAIL, pw=forms.PASSWORD, nm=forms.NAME), log=log)
         if not act:
             if log: log.step("AI", "no risposta", f"step {i}", "warn")
             return {"done": False, "reason": "ai_no_reply"}
