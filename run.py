@@ -7,7 +7,7 @@ Output: out/results.json (stato per sito) + out/trace.txt (step leggibili) + out
 Non interattivo: gira, salva, esce. Monitorabile da telefono leggendo out/trace.txt.
 """
 from __future__ import annotations
-import asyncio, json, sys, time
+import asyncio, json, os, sys, time
 from pathlib import Path
 from farmer.browser import Browser
 from farmer.log import Log
@@ -121,6 +121,28 @@ async def main():
     log.head(f"FINE · {ok}/{len(results)} key ottenute")
     for n, v in results.items():
         log.step("RESULT", n, v.get("status", "?") + (" " + v.get("key", "")[:14] if v.get("key") else ""), "key" if v.get("status") == "ok" else "info")
+
+    _render_and_open_map()
+
+
+def _render_and_open_map():
+    """Genera out/path.html (mappa visiva del percorso) e la apre nel browser di default.
+    Cosi' chi usa il codice VEDE subito cosa ha fatto l'agente, senza cercare file.
+    Disattivabile con SIGNUP_NO_MAP=1."""
+    try:
+        sys.path.insert(0, str(Path(__file__).parent / "tools"))
+        import path_viewer
+        path_viewer.render()
+        html = OUT / "path.html"
+        print(f"\nMap: {html}")
+        if not os.environ.get("SIGNUP_NO_MAP"):
+            try:
+                os.startfile(str(html))          # Windows: apre nel browser di default
+            except AttributeError:
+                import webbrowser
+                webbrowser.open(html.as_uri())   # macOS/Linux
+    except Exception as e:
+        print(f"(map generation skipped: {e})")
 
 
 if __name__ == "__main__":

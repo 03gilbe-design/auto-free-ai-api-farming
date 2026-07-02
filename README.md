@@ -57,8 +57,10 @@ python run.py                  # runs every site in data/sites.json + data/sites
 python run.py Cohere           # runs a single site
 ```
 
-Collected keys are written to `out/keys.txt`. A visual trace of the path taken through each
-site's UI is written to `out/path.html` (regenerate any time with `python tools/path_viewer.py`).
+Collected keys are written to `out/keys.txt`. When the run finishes it **generates
+`out/path.html` and opens it in your browser automatically** — the visual map shown above, one
+per run, so you can see exactly what the agent did on each site (set `SIGNUP_NO_MAP=1` to skip
+the auto-open, or regenerate any time with `python tools/path_viewer.py`).
 
 ## Project layout
 
