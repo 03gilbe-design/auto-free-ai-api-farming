@@ -17,6 +17,13 @@ try:
 except Exception:
     PASSWORD = os.environ.get("SIGNUP_PASSWORD", "").strip()
 NAME = os.environ.get("SIGNUP_NAME", "API Bot")   # pseudonym used on signup forms
+# split for onboarding forms with SEPARATE first/last name fields (e.g. Cohere "About You").
+# Without this the old code put the whole NAME into whichever field matched first (often the
+# first-name one, since it's checked first) and left last-name empty -> the AI fallback had
+# nothing sensible to fill there, tried an empty value, and looped (found live on Cohere).
+_name_parts = NAME.strip().split(None, 1)
+FIRST_NAME = _name_parts[0] if _name_parts else NAME
+LAST_NAME = _name_parts[1] if len(_name_parts) > 1 else "Bot"  # never leave a last-name field empty
 
 _FIRST_PW_DONE = "_pw_done"
 
@@ -58,10 +65,22 @@ async def fill_form(page, log=None) -> dict:
         "input[placeholder*=organization i]", "input[name*=company i]", "input[name*=team i]",
         "input[name*=workspace i]", "input[placeholder*=team i]", "input[placeholder*=workspace i]"],
         "La mia org")
+    # LAST NAME esplicito: va PRIMA del nome generico (altrimenti il selettore generico lo
+    # intercetta e ci mette l'intero NAME, lasciando questo campo vuoto -> la pagina non avanza
+    # e l'AI fallback non ha un valore sensato da scriverci, visto live su Cohere "About You").
+    rep["last_name"] = await _fill_first(page, [
+        "input[name*=last i]", "input[id*=last i]", "input[placeholder*=cognome i]",
+        "input[placeholder*=last i]", "input[autocomplete=family-name]"], LAST_NAME)
+    # FIRST NAME esplicito: se il form ha un campo dedicato, ci va solo la prima parola.
     rep["name"] = await _fill_first(page, [
-        "input[name*=name i]:not([name*=user i]):not([name*=org i]):not([name*=company i])",
-        "input[id*=name i]", "input[placeholder*=nome i]", "input[placeholder*=name i]",
-        "input[autocomplete=name]", "input[autocomplete=given-name]"], NAME)
+        "input[name*=first i]", "input[id*=first i]", "input[placeholder*=first i]",
+        "input[autocomplete=given-name]"], FIRST_NAME)
+    if not rep["name"]:
+        # nessun campo first/last dedicato: probabile form a UN campo "Full name" -> il NOME intero.
+        rep["name"] = await _fill_first(page, [
+            "input[name*=name i]:not([name*=user i]):not([name*=org i]):not([name*=company i])",
+            "input[id*=name i]", "input[placeholder*=nome i]", "input[placeholder*=name i]",
+            "input[autocomplete=name]"], NAME)
     # consensi: spunta OGNI checkbox non spuntata (tos/privacy). L'input vero e' spesso NASCOSTO
     # (opacity 0, stile custom sopra) -> check(force=True) bypassa la visibilita'. Un solo modo
     # generico, niente selettori per-sito.
