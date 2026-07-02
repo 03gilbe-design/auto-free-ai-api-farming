@@ -158,7 +158,10 @@ passed to the LLM — useful for diagnosing why the AI fallback stalled on a giv
 - Env vars: `SIGNUP_ACCOUNT`, `SIGNUP_PASSWORD`, `SIGNUP_NAME`, `SIGNUP_PROFILE`, `GROQ_KEY`,
   `SIGNUP_CHROMIUM` (use Chromium instead of installed Chrome, avoids profile conflicts with a
   Chrome window you already have open), `SIGNUP_SNAPSHOT` (auto-capture every page visited,
-  for offline debugging/fixtures).
+  for offline debugging/fixtures), `SIGNUP_USER_DATA_DIR` (point at an existing Chrome
+  user-data-dir that's already signed in, instead of the repo's empty profile — useful on a
+  fresh clone), `SIGNUP_PROFILE_DIR` (pick a specific sub-profile inside that dir, e.g.
+  `"Profile 2"`).
 
 ## Known limitations
 

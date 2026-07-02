@@ -6,15 +6,15 @@ import subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-TESTS = ["tests/test_page2text.py", "tests/test_links_cookies.py",
-         "tests/test_google.py", "tests/test_forms_grab.py", "tests/test_tree_e2e.py"]
+ROOT = HERE.parent
+TESTS = ["tests/test_offline.py", "tests/test_real_offline.py", "tests/test_regression.py"]
 
 
 def run_once(i):
     print(f"\n########## GIRO {i} ##########")
     allok = True
     for t in TESTS:
-        p = subprocess.run([sys.executable, "-X", "utf8", t], cwd=HERE,
+        p = subprocess.run([sys.executable, "-X", "utf8", t], cwd=ROOT,
                            capture_output=True, text=True, encoding="utf-8")
         last = (p.stdout.strip().splitlines() or ["(no output)"])[-1]
         status = "PASS" if p.returncode == 0 else "FAIL"

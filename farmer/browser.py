@@ -24,8 +24,14 @@ _SUBPROFILE = {
     "account_b": "Profile 1", "account_b": "Profile 1",
     "account_c": "Profile 2", "account_c": "Profile 2",
 }
-_sub = _SUBPROFILE.get(_prof.lower()) if _prof else None
-if _sub:
+# override espliciti: puntano a una user-data-dir/subprofilo Chrome REALE gia' loggato
+# (es. il Chrome di sistema dell'utente), invece del profilo vuoto del repo.
+_user_data_dir = os.environ.get("SIGNUP_USER_DATA_DIR", "").strip()
+_profile_dir_override = os.environ.get("SIGNUP_PROFILE_DIR", "").strip()
+_sub = _profile_dir_override or (_SUBPROFILE.get(_prof.lower()) if _prof else None)
+if _user_data_dir:
+    PROFILE = Path(_user_data_dir)
+elif _sub:
     PROFILE = _DEF_PROFILE                 # dir CONDIVISA (dove vivono i login)
 elif _prof and _prof not in ("account_a", "account_a", "default"):
     PROFILE = _DEF_PROFILE.parent / f"chrome_profile_{_prof}"   # fallback: dir separata

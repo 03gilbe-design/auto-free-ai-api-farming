@@ -41,6 +41,10 @@ async def _detect(page):
 
 
 async def main():
+    if not REAL.exists() or not any(REAL.glob("*.html")):
+        print("Nessuna fixture reale in fixtures/real (non versionate: scaricale con "
+              "download_pages.py per far girare questa regressione). Skip.")
+        return
     fails = []
     async with async_playwright() as pw:
         br = await pw.chromium.launch(headless=True)
