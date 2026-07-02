@@ -125,9 +125,14 @@ _JS_EXTRACT = r"""
   // azionabile confonde l'AI, che ci prova a ripetizione invece di avanzare col task reale
   // (visto live su Cohere: l'AI ha tentato 'fill' su questo badge finche' non si e' arresa).
   const _EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // link/bottoni dentro una <nav> gia' processata: NON ri-visitarli come nodi standalone piu'
+  // avanti nel loop, o _mkref li ri-assegna un SECONDO ref diverso (l'ultimo vince) -> il ref
+  // che l'AI ha letto nella riga nav diventa stale, punta a un elemento gia' cambiato id.
+  const navHandled = new Set();
   for (const el of nodes) {
     if (!vis(el)) continue;
     if (!modalEl && _inCookie(el)) continue;   // banner cookie = rumore, salta
+    if (navHandled.has(el)) continue;
     const tag = el.tagName.toLowerCase();
     const role = (el.getAttribute('role') || '').toLowerCase();
     if ((tag === 'button' || role === 'button' || tag === 'a') &&
@@ -168,7 +173,13 @@ _JS_EXTRACT = r"""
     if (role === 'checkbox') { out.push({k:'check', t, ck: el.getAttribute('aria-checked')==='true', ref: _mkref(el)}); continue; }
     if (role === 'radio')    { out.push({k:'radio', t, ck: el.getAttribute('aria-checked')==='true', ref: _mkref(el)}); continue; }
     if (tag === 'nav' || role === 'navigation') {
-      const items = [...el.querySelectorAll('a,button,[role=menuitem]')].filter(vis).map(txt).filter(Boolean).slice(0,8);
+      // ogni voce riceve il SUO ref: prima erano solo testo flat in una riga (||| A · B · C),
+      // l'AI non aveva modo di targettare UNA voce precisa -> tentava ref di elementi vicini
+      // per indovinare (visto live: cliccava ripetutamente "Profile" pensando fosse "API Keys"
+      // nella nav di Cohere). Restano su una riga sola (token-efficient), ma ognuna e' cliccabile.
+      const kids = [...el.querySelectorAll('a,button,[role=menuitem]')].filter(vis);
+      kids.forEach(k => navHandled.add(k));   // non ri-processarli piu' avanti nel loop
+      const items = kids.map(e => ({t: txt(e), ref: _mkref(e)})).filter(x => x.t).slice(0,8);
       if (items.length) out.push({k:'nav', opt: items});
       continue;
     }
@@ -235,7 +246,12 @@ def _fmt(n: dict) -> str | None:
         return f"({'o' if n.get('ck') else ' '}) {t}{_ref_tag(n)}".rstrip()
     if k == "nav":
         items = n.get("opt") or []
-        return ("||| " + " · ".join(items)) if items else None
+        if not items:
+            return None
+        # ogni voce {t, ref} col SUO {ref:eN} -> targettabile individualmente (vedi nota sopra)
+        parts = [f"{it.get('t','')}{_ref_tag(it)}" if isinstance(it, dict) else str(it)
+                 for it in items]
+        return "||| " + " · ".join(parts)
     if k == "head":
         return f"# {t}" if t else None
     if k == "icon":
@@ -265,7 +281,8 @@ async def page_to_text(page, max_lines: int = 60) -> str:
             continue
         # raccogli voci nav per sopprimere link standalone duplicati
         if n.get("k") == "nav":
-            nav_items.update((i or "").strip().lower() for i in (n.get("opt") or []))
+            nav_items.update(((i.get("t") if isinstance(i, dict) else i) or "").strip().lower()
+                             for i in (n.get("opt") or []))
         elif n.get("k") == "link" and (n.get("t") or "").strip().lower() in nav_items:
             continue
         seen.add(norm)
