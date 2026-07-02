@@ -73,6 +73,11 @@ async def main():
     args = [a for a in args if not a.startswith("--")]
     only = args[0] if args else None
 
+    if not forms.EMAIL:
+        raise RuntimeError(
+            "SIGNUP_ACCOUNT is required for live runs (no placeholder fallback — set it via env "
+            "var or the OS keyring so a run never proceeds silently against fake data).")
+
     targets = [site_cfg(only)] if only else [site_cfg(s["name"]) for s in SITES]
     results = _load()
     log = Log(reset=True)

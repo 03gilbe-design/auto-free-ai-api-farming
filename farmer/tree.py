@@ -8,7 +8,7 @@ Stop manuale: se l'utente crea il file out/STOP, run.py interrompe tra un sito e
 A meta sito non ci si ferma mai: si arriva sempre a un esito.
 """
 from __future__ import annotations
-import os, re
+import json, os, re
 from . import cookies, links, google_oauth, forms, grabkey, ai_fallback, logout, github_oauth, snapshot
 
 KEY_HINT = ("api-key", "apikey", "/keys", "/tokens", "developer", "dashboard")
@@ -51,7 +51,7 @@ async def _click_text(page, texts) -> bool:
     for t in texts:
         for tag in ["button", "a", "[role=button]", "[type=submit]"]:
             try:
-                loc = page.locator(f"{tag}:has-text('{t}')").first
+                loc = page.locator(f"{tag}:has-text({json.dumps(t)})").first
                 if await loc.count() and await loc.is_visible():
                     await loc.click(timeout=2500)
                     return True

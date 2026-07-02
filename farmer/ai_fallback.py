@@ -160,6 +160,15 @@ c'e'. Se vedi solo un campo email/token, compila quello. Google solo se visibile
 _TAG2TYPE = {"button": "button", "a": "link", "[role=button]": "button", "*": "button"}
 
 
+def _css_text(t: str) -> str:
+    """Stringa sicura per :has-text(...) e attribute-selector *=...: se il testo (dell'AI o di
+    un campo reale) contiene un apostrofo (es. \"Sono d'accordo\", \"I've read\"), l'interpolazione
+    grezza f\"...'{t}'...\" spezza il selettore CSS a meta' stringa -> match silenziosamente
+    sbagliato o eccezione. json.dumps produce una stringa JS a doppi apici correttamente
+    escapata, che Playwright accetta ovunque serva un valore testuale nel selettore."""
+    return json.dumps(t or "")
+
+
 def _strip_deco(s: str) -> str:
     """page2text renders elements with decorators the AI copies verbatim into its action
     ([Text]=button, <Text>=link, *Text*=field, #Text=heading) — strip them before building a
@@ -230,7 +239,7 @@ async def _exec(page, act: dict, log=None) -> str | None:
         if a == "click":
             t = _strip_deco(act.get("text", ""))
             for tag in ["button", "a", "[role=button]", "*"]:
-                loc = page.locator(f"{tag}:has-text('{t}')").first
+                loc = page.locator(f"{tag}:has-text({_css_text(t)})").first
                 if await loc.count() and await loc.is_visible():
                     # bottone disabled (es. submit bloccato finche' non spunti i termini):
                     # non forzare, segnala fallimento cosi' la catena spunta prima la checkbox.
@@ -247,10 +256,11 @@ async def _exec(page, act: dict, log=None) -> str | None:
             # cascata: placeholder -> aria-label -> name/id -> textbox visibile dentro una modale
             # aperta (il caso reale che bloccava Groq: il campo "Key name" nel dialog create-key
             # non ha un placeholder che matcha) -> qualsiasi textbox visibile come ultima spiaggia.
+            phq = _css_text(ph)
             cands = [
-                f"input[placeholder*='{ph}' i], textarea[placeholder*='{ph}' i]",
-                f"[aria-label*='{ph}' i]",
-                f"input[name*='{ph}' i], input[id*='{ph}' i]",
+                f"input[placeholder*={phq} i], textarea[placeholder*={phq} i]",
+                f"[aria-label*={phq} i]",
+                f"input[name*={phq} i], input[id*={phq} i]",
                 "[role=dialog] input:visible, dialog input:visible, [aria-modal='true'] input:visible",
                 "input:visible, textarea:visible, [role=textbox]:visible",
             ] if ph else [
@@ -267,9 +277,10 @@ async def _exec(page, act: dict, log=None) -> str | None:
             # (opacity 0, stile custom sopra) -> is_visible()=False. Percio': prima l'input per
             # ruolo/tipo con FORCE (bypassa la visibilita'), poi la label/wrapper visibile cliccabile.
             t = _strip_deco(act.get("text", ""))
+            tq = _css_text(t)
             # 1) input checkbox associato al testo, o il primo: check(force) anche se nascosto
-            for sel in (f"label:has-text('{t}') input[type=checkbox]",
-                        f"input[type=checkbox][aria-label*='{t}' i]",
+            for sel in (f"label:has-text({tq}) input[type=checkbox]",
+                        f"input[type=checkbox][aria-label*={tq} i]",
                         "input[type=checkbox]", "[role=checkbox]"):
                 loc = page.locator(sel).first
                 if await loc.count():
@@ -283,7 +294,7 @@ async def _exec(page, act: dict, log=None) -> str | None:
                         except Exception:
                             pass
             # 2) fallback: clicca la label/wrapper VISIBILE (attiva la checkbox custom)
-            for sel in (f"label:has-text('{t}')", f"*:has-text('{t}')"):
+            for sel in (f"label:has-text({tq})", f"*:has-text({tq})"):
                 loc = page.locator(sel).first
                 if await loc.count() and await loc.is_visible():
                     await loc.click(timeout=2000)

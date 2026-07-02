@@ -3,6 +3,7 @@ Quantcast, Didomi, TrustArc, Osano, Usercentrics) + fallback testo "rifiuta/reje
 Cerca su tutti i frame. No-op se nessun banner.
 """
 from __future__ import annotations
+import json
 
 # selettori specifici CMP -> click diretto (preferisci REJECT, poi accept se reject assente)
 _REJECT_SEL = [
@@ -55,7 +56,8 @@ async def _try(scope, selectors, texts) -> str | None:
         try:
             loc = scope.get_by_role("button", name=re.compile(re.escape(t), re.I)).first
             if not await loc.count():
-                loc = scope.locator(f"button:has-text('{t}'), a:has-text('{t}'), [role=button]:has-text('{t}')").first
+                tq = json.dumps(t)
+                loc = scope.locator(f"button:has-text({tq}), a:has-text({tq}), [role=button]:has-text({tq})").first
             if await loc.count() and await loc.is_visible():
                 await loc.click(timeout=1500)
                 return f"contains:{t}"

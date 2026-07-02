@@ -8,7 +8,13 @@ SCALA DI PRIORITA' (come un umano legge la pagina):
 Usato da google_oauth e github_oauth -> stessa logica, niente duplicazione, niente keyword per-sito.
 """
 from __future__ import annotations
-import re
+import json, re
+
+
+def _css_text(t: str) -> str:
+    """Stringa sicura per :has-text(...): un apostrofo nel testo (es. 'L'accordo') spezzerebbe
+    l'interpolazione grezza f\"...'{t}'...\"."""
+    return json.dumps(t or "")
 
 # trappole per provider: contengono il nome ma NON sono login
 _TRAPS = {
@@ -93,7 +99,7 @@ async def click_login(page, provider: str, attr_selectors: list[str],
     for t in (text_phrases or []):
         for tag in ["button", "a", "[role=button]"]:
             try:
-                loc = page.locator(f"{tag}:has-text('{t}')").first
+                loc = page.locator(f"{tag}:has-text({_css_text(t)})").first
                 if await loc.count() and await loc.is_visible():
                     await loc.click(timeout=2500); return True
             except Exception:

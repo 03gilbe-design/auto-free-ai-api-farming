@@ -9,9 +9,14 @@ Strategia (generica, deterministica):
 Ritorna True se ha (probabilmente) sloggato.
 """
 from __future__ import annotations
+import json
 from urllib.parse import urlparse
 
 _LOGOUT_TXT = ["sign out", "log out", "logout", "esci", "disconnetti", "sign-out"]
+
+
+def _css_text(t: str) -> str:
+    return json.dumps(t or "")
 _MENU_SEL = ["[aria-label*='account' i]", "[aria-label*='profile' i]", "[aria-label*='menu' i]",
              "button[class*='avatar' i]", "img[alt*='avatar' i]", "[data-testid*='user' i]",
              "[class*='avatar' i]", "[class*='userMenu' i]"]
@@ -23,7 +28,7 @@ async def _click_text(page, words) -> bool:
     for t in words:
         for tag in ["button", "a", "[role=menuitem]", "[role=button]"]:
             try:
-                loc = page.locator(f"{tag}:has-text('{t}')").first
+                loc = page.locator(f"{tag}:has-text({_css_text(t)})").first
                 if await loc.count() and await loc.is_visible():
                     await loc.click(timeout=2000)
                     return True

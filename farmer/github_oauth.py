@@ -15,10 +15,14 @@ ha gia la sessione GitHub, basta il caso A (Authorize) senza password.
 Ritorna "github" se ha cliccato il bottone, None se assente.
 """
 from __future__ import annotations
-import os
+import json, os
 from pathlib import Path
 
 _CREDS = Path.home() / ".gh_creds"
+
+
+def _css_text(t: str) -> str:
+    return json.dumps(t or "")
 
 
 def _is_github_host(url: str) -> bool:
@@ -104,7 +108,8 @@ async def handle_github_page(gp, log=None) -> None:
         clicked = False
         for t in _AUTHORIZE_TEXT:
             try:
-                loc = gp.locator(f"button:has-text('{t}'), input[value*='{t}' i], [role=button]:has-text('{t}')").first
+                tq = _css_text(t)
+                loc = gp.locator(f"button:has-text({tq}), input[value*={tq} i], [role=button]:has-text({tq})").first
                 if await loc.count() and await loc.is_visible():
                     en = await loc.is_enabled()
                     if en:

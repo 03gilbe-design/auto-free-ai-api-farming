@@ -308,7 +308,8 @@ async def _cloudflare_token(page, log=None) -> dict:
     for _ in range(3):
         for txt in ["Workers AI", "API Tokens", "API token", "Tokens", "Create token", "Create API Token"]:
             try:
-                loc = page.locator(f"button:has-text('{txt}'), a:has-text('{txt}'), [role=button]:has-text('{txt}')").first
+                tq = _css_str(txt)
+                loc = page.locator(f"button:has-text({tq}), a:has-text({tq}), [role=button]:has-text({tq})").first
                 if await loc.count() and await loc.is_visible():
                     await loc.click(timeout=2000)
                     await page.wait_for_timeout(1200)

@@ -4,15 +4,18 @@ Detects phone fields (tree branch: phone -> AI attempts skip).
 from __future__ import annotations
 import os, re
 
-# Active account, set via env vars (multi-account collection). No personal defaults ship here.
+# Active account, set via env vars (multi-account collection). No placeholder fallback: a fake
+# "you@example.com" here would let a live run silently proceed against fake data instead of
+# failing loudly (run.py's main() raises if this is empty before opening a browser — see there).
 # The signup password prefers the OS keyring (auto-free-ai-api-farming/signup_password), then
-# SIGNUP_PASSWORD, then a placeholder — so no real credential needs to live in the environment.
-EMAIL = os.environ.get("SIGNUP_ACCOUNT", "you@example.com")
+# SIGNUP_PASSWORD, then empties out — no real credential needs to live in the environment, and
+# no fake one masks a missing one.
+EMAIL = os.environ.get("SIGNUP_ACCOUNT", "").strip()
 try:
     from . import secretstore as _ss
-    PASSWORD = _ss.get("signup_password", env=("SIGNUP_PASSWORD",)) or "ChangeMe2026!Farm"
+    PASSWORD = _ss.get("signup_password", env=("SIGNUP_PASSWORD",)) or ""
 except Exception:
-    PASSWORD = os.environ.get("SIGNUP_PASSWORD", "ChangeMe2026!Farm")
+    PASSWORD = os.environ.get("SIGNUP_PASSWORD", "").strip()
 NAME = os.environ.get("SIGNUP_NAME", "API Bot")   # pseudonym used on signup forms
 
 _FIRST_PW_DONE = "_pw_done"
