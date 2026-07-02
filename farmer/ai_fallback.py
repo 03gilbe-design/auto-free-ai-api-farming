@@ -135,7 +135,9 @@ Rispondi SOLO JSON con UNA azione. Se l'elemento ha un {{ref:eN}} accanto, INCLU
 con quel valore esatto (es. "e3") oltre al testo — e' piu' affidabile del testo da solo:
 {{"action":"click","text":"testo esatto bottone/link","ref":"e3"}}
 {{"action":"fill","placeholder":"testo campo","value":"valore","ref":"e5"}}
-{{"action":"check","text":"testo vicino alla checkbox","ref":"e7"}}  per spuntare caselle (es. Accetto i Termini)
+{{"action":"check","text":"testo vicino alla checkbox","ref":"e7"}}  per spuntare caselle [ ] (es. Accetto i Termini)
+{{"action":"radio","text":"testo vicino al radio","ref":"e8"}}  per scegliere UNA opzione ( ) tra piu' esclusive
+{{"action":"select","option":"testo opzione da scegliere","ref":"e9"}}  per una tendina V-Label-V
 {{"action":"goto","url":"https://..."}}
 {{"action":"done"}}  se goal raggiunto
 {{"action":"giveup"}} se impossibile
@@ -152,6 +154,7 @@ Rispondi SOLO JSON:
 {{"action":"click","text":"testo esatto visibile"}}
 {{"action":"fill","placeholder":"testo vicino al campo","value":"valore"}}
 {{"action":"check","text":"testo vicino alla checkbox"}}  per spuntare caselle (es. Accetto i Termini)
+{{"action":"radio","text":"testo vicino al radio"}}  per scegliere UNA opzione tra piu' esclusive
 {{"action":"goto","url":"https://..."}}
 {{"action":"done"}}  se il goal e' raggiunto (es. API key visibile)
 {{"action":"giveup"}} se c'e' un muro (captcha immagine, telefono)
@@ -204,7 +207,7 @@ async def _exec(page, act: dict, log=None) -> str | None:
     regressione, e' un livello di robustezza aggiuntivo, non un sostituto."""
     a = act.get("action")
     ref = act.get("ref")
-    if ref and a in ("click", "check"):
+    if ref and a in ("click", "check", "radio"):
         loc = await _exec_by_ref(page, ref)
         if loc is not None:
             try:
@@ -217,14 +220,15 @@ async def _exec(page, act: dict, log=None) -> str | None:
                             return "button"
                     except Exception:
                         ref = None
-                else:  # check
+                else:  # check / radio: stesso trattamento (entrambi Playwright .check())
+                    kind = "checkbox" if a == "check" else "radio"
                     try:
                         await loc.check(force=True, timeout=2500)
-                        return "checkbox"
+                        return kind
                     except Exception:
                         try:
                             await loc.click(force=True, timeout=2000)
-                            return "checkbox"
+                            return kind
                         except Exception:
                             ref = None
             except Exception:
@@ -237,6 +241,19 @@ async def _exec(page, act: dict, log=None) -> str | None:
                 return "textbox"
             except Exception:
                 pass
+    elif ref and a == "select":
+        loc = await _exec_by_ref(page, ref)
+        if loc is not None:
+            opt = _strip_deco(act.get("option", "") or act.get("value", ""))
+            try:
+                await loc.select_option(label=opt, timeout=2500)
+                return "select"
+            except Exception:
+                try:
+                    await loc.select_option(value=opt, timeout=2000)
+                    return "select"
+                except Exception:
+                    pass
     try:
         if a == "click":
             t = _strip_deco(act.get("text", ""))
@@ -301,6 +318,52 @@ async def _exec(page, act: dict, log=None) -> str | None:
                 if await loc.count() and await loc.is_visible():
                     await loc.click(timeout=2000)
                     return "checkbox"
+        elif a == "radio":
+            # SELEZIONA un radio (gruppo di scelta esclusiva, es. "What is your role?"). Prima
+            # non esisteva nessuna azione dedicata: l'AI provava a "click" sul testo del radio,
+            # a volte funzionava per caso (colpiva la label), a volte no (colpiva un wrapper che
+            # non propaga il click all'input reale) -> radio mai selezionato, la pagina non
+            # avanzava, l'AI ripeteva l'unico altro campo compilabile finche' il loop-guard non
+            # si arrendeva (visto live: pagina "role" di Cohere). Stesso pattern verificato dei
+            # checkbox: input associato per label/aria-label PRIMA, wrapper visibile come fallback.
+            t = _strip_deco(act.get("text", ""))
+            tq = _css_text(t)
+            for sel in (f"label:has-text({tq}) input[type=radio]",
+                        f"input[type=radio][aria-label*={tq} i]",
+                        "input[type=radio]", "[role=radio]"):
+                loc = page.locator(sel).first
+                if await loc.count():
+                    try:
+                        await loc.check(force=True, timeout=2500)
+                        return "radio"
+                    except Exception:
+                        try:
+                            await loc.click(force=True, timeout=2000)
+                            return "radio"
+                        except Exception:
+                            pass
+            for sel in (f"label:has-text({tq})", f"*:has-text({tq})"):
+                loc = page.locator(sel).first
+                if await loc.count() and await loc.is_visible():
+                    await loc.click(timeout=2000)
+                    return "radio"
+        elif a == "select":
+            # tendina nativa <select>: nessun ref valido -> ricostruisce un locator dal testo
+            # dell'opzione desiderata (fallback raro, il ramo ref-first sopra copre il caso normale).
+            opt = _strip_deco(act.get("option", "") or act.get("value", ""))
+            t = _strip_deco(act.get("text", ""))
+            cand = page.locator(f"select:near(:text({_css_text(t)}))") if t else page.locator("select")
+            loc = cand.first
+            if await loc.count():
+                try:
+                    await loc.select_option(label=opt, timeout=2500)
+                    return "select"
+                except Exception:
+                    try:
+                        await loc.select_option(value=opt, timeout=2000)
+                        return "select"
+                    except Exception:
+                        pass
         elif a == "goto":
             await page.goto(act["url"], timeout=15000)
             return "nav"
