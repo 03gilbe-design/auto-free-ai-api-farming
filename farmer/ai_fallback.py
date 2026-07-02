@@ -127,16 +127,17 @@ _SYS = """Sei un agente che automatizza signup per API key gratuite. Account: {a
 La password NON ti viene fornita e la inserisce il codice in automatico: se serve compilare un
 campo password usa value "" (stringa vuota); NON inventare ne' scrivere mai una password.
 Goal: {goal}
-Pagina corrente (testo compatto, [X]=bottone <X>=link *X*=campo V-X-V=tendina):
+Pagina corrente (testo compatto, [X]=bottone <X>=link *X*=campo V-X-V=tendina, {{ref:eN}}=id stabile):
 {page}
-Rispondi SOLO JSON con UNA azione:
-{{"action":"click","text":"testo esatto bottone/link"}}
-{{"action":"fill","placeholder":"testo campo","value":"valore"}}
-{{"action":"check","text":"testo vicino alla checkbox"}}  per spuntare caselle (es. Accetto i Termini)
+Rispondi SOLO JSON con UNA azione. Se l'elemento ha un {{ref:eN}} accanto, INCLUDI SEMPRE "ref"
+con quel valore esatto (es. "e3") oltre al testo — e' piu' affidabile del testo da solo:
+{{"action":"click","text":"testo esatto bottone/link","ref":"e3"}}
+{{"action":"fill","placeholder":"testo campo","value":"valore","ref":"e5"}}
+{{"action":"check","text":"testo vicino alla checkbox","ref":"e7"}}  per spuntare caselle (es. Accetto i Termini)
 {{"action":"goto","url":"https://..."}}
 {{"action":"done"}}  se goal raggiunto
 {{"action":"giveup"}} se impossibile
-REGOLE: usa SOLO testo che vedi ELENCATO sopra; NON inventare bottoni assenti. Se NON c'e' un
+REGOLE: usa SOLO testo/ref che vedi ELENCATO sopra; NON inventare bottoni assenti. Se NON c'e' un
 bottone Google nella lista, NON scriverlo: compila il modulo email/password presente o cerca il
 campo email per ricevere un token. Google solo se compare davvero. Mai cookie/privacy/social."""
 
@@ -168,10 +169,63 @@ def _strip_deco(s: str) -> str:
     return re.sub(r"^[\[\<\*#\s]+|[\]\>\*\s]+$", "", s or "").strip()
 
 
+async def _exec_by_ref(page, ref: str):
+    """Risolve un ref stabile (data-af-ref, iniettato da page2text al momento della lettura) in
+    un Locator visibile, o None se assente/non piu' visibile. Un solo selettore diretto, niente
+    ambiguita' testuale: stesso pattern di Playwright MCP / browser-use ('snapshot + ref')."""
+    try:
+        loc = page.locator(f"[data-af-ref='{ref}']").first
+        if not (await loc.count() and await loc.is_visible()):
+            return None
+        return loc
+    except Exception:
+        return None
+
+
 async def _exec(page, act: dict, log=None) -> str | None:
     """Esegue l'azione. Ritorna il TIPO di elemento toccato (textbox/button/link/nav) se riuscita,
-    None se fallita. Il tipo serve a learned.record (elemento gia' visto)."""
+    None se fallita. Il tipo serve a learned.record (elemento gia' visto).
+
+    Se act ha un "ref" (id stabile assegnato da page2text sull'ultimo snapshot), prova quello
+    per PRIMO: risolve direttamente l'elemento via [data-af-ref='eN'], senza passare dal testo
+    (quindi immune al bug dei decoratori [Text]/<Text> copiati dall'AI). Se il ref manca o e'
+    stale (pagina cambiata dall'ultimo snapshot), cade nella cascata per-testo sotto — nessuna
+    regressione, e' un livello di robustezza aggiuntivo, non un sostituto."""
     a = act.get("action")
+    ref = act.get("ref")
+    if ref and a in ("click", "check"):
+        loc = await _exec_by_ref(page, ref)
+        if loc is not None:
+            try:
+                if a == "click":
+                    try:
+                        if not await loc.is_enabled():
+                            ref = None  # disabled: cadi nella cascata testo (puo' spuntare consensi prima)
+                        else:
+                            await loc.click(timeout=3000)
+                            return "button"
+                    except Exception:
+                        ref = None
+                else:  # check
+                    try:
+                        await loc.check(force=True, timeout=2500)
+                        return "checkbox"
+                    except Exception:
+                        try:
+                            await loc.click(force=True, timeout=2000)
+                            return "checkbox"
+                        except Exception:
+                            ref = None
+            except Exception:
+                ref = None
+    elif ref and a == "fill":
+        loc = await _exec_by_ref(page, ref)
+        if loc is not None:
+            try:
+                await loc.fill(act.get("value", ""), timeout=2500)
+                return "textbox"
+            except Exception:
+                pass
     try:
         if a == "click":
             t = _strip_deco(act.get("text", ""))

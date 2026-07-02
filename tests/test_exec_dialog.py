@@ -2,6 +2,9 @@
 modal, but _exec() silently fails to click/fill because (a) it doesn't strip the page2text
 decorators the AI copies verbatim ('[Close]' vs the real DOM text 'Close'), and (b) fill()
 only tried a placeholder match with no fallback for a plain textbox inside an open dialog.
+Also covers the follow-up robustness layer: ref-based resolution (data-af-ref, injected by
+page2text at snapshot time), the "snapshot+ref" pattern used by Playwright MCP/browser-use —
+bypasses text-matching entirely when a ref is available.
 
 No live browser account, no AI call — pure DOM fixture + _exec logic.
 Uso: py -3.11 -X utf8 test_exec_dialog.py
@@ -11,7 +14,7 @@ import asyncio
 from pathlib import Path
 from playwright.async_api import async_playwright
 import sys, pathlib; sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-from farmer import ai_fallback
+from farmer import ai_fallback, page2text
 
 FIX = (Path(__file__).parent / "fixtures" / "create_key_modal.html").resolve().as_uri()
 
@@ -40,6 +43,52 @@ async def main():
             check2b = val == "pcPersonale"
             print(f"  {'PASS' if check2b else 'FAIL'}  value actually written -> {val!r}")
             ok = ok and check2b
+
+        # 3) ref-based resolution: read a real page2text snapshot, pull the refs it assigned,
+        # then act using ONLY the ref (no text at all) -> proves the ref path works standalone.
+        await page.reload()
+        txt = await page2text.page_to_text(page)
+        import re as _re
+        m_close = _re.search(r"\[Close\]\s*\{ref:(e\d+)\}", txt)
+        # il campo ha name="key_name" (no placeholder) -> page2text usa quello: *key_name*(text)
+        m_field = _re.search(r"\*key_name\*\(text\)\s*\{ref:(e\d+)\}", txt)
+        check3 = bool(m_close and m_field)
+        print(f"  {'PASS' if check3 else 'FAIL'}  page2text emits {{ref:eN}} tags -> "
+              f"close={m_close.group(1) if m_close else None} field={m_field.group(1) if m_field else None}")
+        ok = ok and check3
+        if check3:
+            el3 = await ai_fallback._exec(page, {"action": "click", "ref": m_close.group(1)})
+            check4 = el3 == "button"
+            print(f"  {'PASS' if check4 else 'FAIL'}  click by ref alone (no text) -> {el3!r}")
+            ok = ok and check4
+
+            el4 = await ai_fallback._exec(page, {"action": "fill", "ref": m_field.group(1),
+                                                  "value": "byRef"})
+            check5 = el4 == "textbox"
+            print(f"  {'PASS' if check5 else 'FAIL'}  fill by ref alone (no placeholder match) -> {el4!r}")
+            ok = ok and check5
+            if check5:
+                val2 = await page.locator("input[name=key_name]").input_value()
+                check5b = val2 == "byRef"
+                print(f"  {'PASS' if check5b else 'FAIL'}  ref-fill value actually written -> {val2!r}")
+                ok = ok and check5b
+
+        # 4) dedup still works despite refs being unique-per-element (would otherwise bloat
+        # the AI's context with "duplicate" buttons that only differ by {ref:eN})
+        dup = Path(__file__).parent / "fixtures" / "_dup_buttons.html"
+        dup.write_text("<html><body><button>Close</button><button>Close</button></body></html>",
+                       encoding="utf-8")
+        try:
+            page2 = await br.new_page()
+            await page2.goto(dup.resolve().as_uri())
+            txt2 = await page2text.page_to_text(page2)
+            n_close = txt2.count("[Close]")
+            check6 = n_close == 1
+            print(f"  {'PASS' if check6 else 'FAIL'}  dedup ignores {{ref:eN}} (2 identical buttons -> 1 line) -> count={n_close}")
+            ok = ok and check6
+            await page2.close()
+        finally:
+            dup.unlink(missing_ok=True)
 
         await br.close()
     print("\n=== EXEC/DIALOG TEST:", "TUTTO PASS" if ok else "QUALCOSA FALLISCE", "===")

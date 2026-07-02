@@ -13,11 +13,21 @@ Notazione (richiesta utente):
   ~Testo~            testo statico rilevante (max poche righe)
   (CAPTCHA: tipo)    widget captcha visibile
   icone -> ASCII (vedi _ICON_MAP), sconosciute -> [icon]
+  {ref:eN}           id stabile dell'elemento (vedi sotto)
+
+REF STABILI (come Playwright MCP / browser-use "snapshot+ref"): ogni elemento azionabile
+riceve un attributo DOM `data-af-ref="eN"` iniettato al momento della lettura, e il suo `{ref:eN}`
+appare accanto al testo. L'AI puo' rispondere con `{"action":"click","ref":"e3"}` invece di
+ripetere il testo — _exec lo risolve con un solo selettore diretto (`[data-af-ref='e3']`), niente
+match testuale da rompere (era la causa del bug "0 key estratte pur raggiunto il modale": l'AI
+copiava i decoratori `[Text]` nel testo dell'azione). Il testo resta comunque disponibile come
+fallback (es. per il tier vision, dove non c'e' DOM da annotare).
 
 Obiettivo: poche centinaia di token, abbastanza per decidere il prossimo click.
 Fonte: JS in-page (visibilita reale + ordine DOM). a11y tree come arricchimento ruolo.
 """
 from __future__ import annotations
+import re
 
 # mappa nomi-icona comuni -> ascii. Esteso al volo.
 _ICON_MAP = {
@@ -34,6 +44,12 @@ _JS_EXTRACT = r"""
 () => {
   const out = [];
   const seen = new Set();
+  let _refN = 0;
+  // ref stabile per l'elemento appena letto: iniettato come attributo DOM, cosi' Python puo'
+  // rilocalizzarlo con [data-af-ref='eN'] invece di ri-matchare per testo dopo che l'AI l'ha
+  // riscritto (spesso coi decoratori [X]/<X> compresi -> mismatch, era il bug del create-key
+  // modal). Riassegnato ad ogni lettura: harmless, e' un attributo solo-nostro.
+  const _mkref = (el) => { const r = 'e' + (_refN++); el.setAttribute('data-af-ref', r); return r; };
   const vis = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return false;
@@ -114,27 +130,27 @@ _JS_EXTRACT = r"""
     if (tag === 'input') {
       const ty = (el.type || 'text').toLowerCase();
       if (ty === 'hidden') continue;
-      if (ty === 'checkbox') { out.push({k:'check', t: labelFor(el) || el.name || '', ck: el.checked}); continue; }
-      if (ty === 'radio')    { out.push({k:'radio', t: labelFor(el) || el.value || '', ck: el.checked}); continue; }
-      if (ty === 'submit' || ty === 'button') { out.push({k:'btn', t: el.value || t || 'Invia'}); continue; }
-      out.push({k:'field', t: el.placeholder || el.getAttribute('aria-label') || el.name || '', ty: ty});
+      if (ty === 'checkbox') { out.push({k:'check', t: labelFor(el) || el.name || '', ck: el.checked, ref: _mkref(el)}); continue; }
+      if (ty === 'radio')    { out.push({k:'radio', t: labelFor(el) || el.value || '', ck: el.checked, ref: _mkref(el)}); continue; }
+      if (ty === 'submit' || ty === 'button') { out.push({k:'btn', t: el.value || t || 'Invia', ref: _mkref(el)}); continue; }
+      out.push({k:'field', t: el.placeholder || el.getAttribute('aria-label') || el.name || '', ty: ty, ref: _mkref(el)});
       continue;
     }
-    if (tag === 'textarea') { out.push({k:'field', t: el.placeholder || el.name || '', ty:'area'}); continue; }
+    if (tag === 'textarea') { out.push({k:'field', t: el.placeholder || el.name || '', ty:'area', ref: _mkref(el)}); continue; }
     if (tag === 'select') {
       const opts = [...el.options].map(o => o.text.trim()).filter(Boolean).slice(0,6);
-      out.push({k:'select', t: el.getAttribute('aria-label') || el.name || '', opt: opts}); continue;
+      out.push({k:'select', t: el.getAttribute('aria-label') || el.name || '', opt: opts, ref: _mkref(el)}); continue;
     }
     if (tag === 'button' || role === 'button') {
-      if (t) { out.push({k:'btn', t}); } else { out.push({k:'icon', t: iconName(el)}); }
+      if (t) { out.push({k:'btn', t, ref: _mkref(el)}); } else { out.push({k:'icon', t: iconName(el), ref: _mkref(el)}); }
       continue;
     }
     if (tag === 'a' || role === 'link' || role === 'menuitem') {
-      if (t) out.push({k:'link', t}); else { const ic = iconName(el); if (ic.trim()) out.push({k:'icon', t: ic}); }
+      if (t) out.push({k:'link', t, ref: _mkref(el)}); else { const ic = iconName(el); if (ic.trim()) out.push({k:'icon', t: ic, ref: _mkref(el)}); }
       continue;
     }
-    if (role === 'checkbox') { out.push({k:'check', t, ck: el.getAttribute('aria-checked')==='true'}); continue; }
-    if (role === 'radio')    { out.push({k:'radio', t, ck: el.getAttribute('aria-checked')==='true'}); continue; }
+    if (role === 'checkbox') { out.push({k:'check', t, ck: el.getAttribute('aria-checked')==='true', ref: _mkref(el)}); continue; }
+    if (role === 'radio')    { out.push({k:'radio', t, ck: el.getAttribute('aria-checked')==='true', ref: _mkref(el)}); continue; }
     if (tag === 'nav' || role === 'navigation') {
       const items = [...el.querySelectorAll('a,button,[role=menuitem]')].filter(vis).map(txt).filter(Boolean).slice(0,8);
       if (items.length) out.push({k:'nav', opt: items});
@@ -170,26 +186,31 @@ def _ascii_icon(blob: str) -> str:
     return f"[{w[0][:10]}]" if w else "[icon]"
 
 
+def _ref_tag(n: dict) -> str:
+    r = n.get("ref")
+    return f" {{ref:{r}}}" if r else ""
+
+
 def _fmt(n: dict) -> str | None:
     k = n.get("k")
     t = (n.get("t") or "").strip()
     if k == "btn":
-        return f"[{t or 'BOTTONE'}]"
+        return f"[{t or 'BOTTONE'}]{_ref_tag(n)}"
     if k == "link":
-        return f"<{t}>" if t else None
+        return f"<{t}>{_ref_tag(n)}" if t else None
     if k == "field":
         ty = n.get("ty", "text")
         body = f"*{t}*" if t else "[____]"
-        return f"{body}({ty})"
+        return f"{body}({ty}){_ref_tag(n)}"
     if k == "select":
         opts = n.get("opt") or []
         label = t or (opts[0] if opts else "scelta")
         tail = (" {" + " · ".join(opts[:5]) + "}") if opts else ""
-        return f"V-{label}-V{tail}"
+        return f"V-{label}-V{tail}{_ref_tag(n)}"
     if k == "check":
-        return f"[{'x' if n.get('ck') else ' '}] {t}".rstrip()
+        return f"[{'x' if n.get('ck') else ' '}] {t}{_ref_tag(n)}".rstrip()
     if k == "radio":
-        return f"({'o' if n.get('ck') else ' '}) {t}".rstrip()
+        return f"({'o' if n.get('ck') else ' '}) {t}{_ref_tag(n)}".rstrip()
     if k == "nav":
         items = n.get("opt") or []
         return ("||| " + " · ".join(items)) if items else None
@@ -213,8 +234,11 @@ async def page_to_text(page, max_lines: int = 60) -> str:
         s = _fmt(n)
         if not s:
             continue
-        # dedup normalizzato: ignora maiuscole/spazi multipli (odia doppioni)
+        # dedup normalizzato: ignora maiuscole/spazi multipli (odia doppioni) E il {ref:eN}
+        # (altrimenti ogni elemento avrebbe un ref diverso -> stringa sempre unica -> il dedup
+        # smetterebbe di funzionare, gonfiando il testo con bottoni "duplicati" per l'AI)
         norm = " ".join(s.lower().split())
+        norm = re.sub(r"\{ref:e\d+\}", "", norm).strip()
         if norm in seen:
             continue
         # raccogli voci nav per sopprimere link standalone duplicati

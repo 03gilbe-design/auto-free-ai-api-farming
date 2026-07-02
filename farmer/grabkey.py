@@ -351,7 +351,10 @@ async def _cloudflare_token(page, log=None) -> dict:
 
 async def _clickables(page) -> list[dict]:
     """TUTTI gli elementi cliccabili visibili con il loro testo. Per SAPERE cosa c'e' davvero
-    sulla pagina (niente piu' indovinare): ritorna [{i, text}]. Lo logghiamo come stato reale."""
+    sulla pagina (niente piu' indovinare): ritorna [{i, text, ref}]. Lo logghiamo come stato reale.
+    ref = attributo data-af-ref iniettato sull'elemento -> _click_item lo rilocalizza con UN
+    selettore diretto invece di ri-matchare per testo (stesso pattern robusto usato in
+    ai_fallback.py: uno snapshot->testo->re-match e' un punto fragile, un id stabile no)."""
     try:
         return await page.evaluate(r"""() => {
           const out = [];
@@ -362,7 +365,11 @@ async def _clickables(page) -> list[dict]:
             const st = getComputedStyle(e);
             if (r.width < 4 || r.height < 4 || st.visibility === 'hidden' || st.display === 'none') continue;
             const t = (e.innerText || e.getAttribute('aria-label') || e.title || '').trim().replace(/\s+/g,' ');
-            if (t) out.push({ i: i++, text: t.slice(0, 40) });
+            if (t) {
+              const ref = 'k' + i;
+              e.setAttribute('data-af-ref', ref);
+              out.push({ i: i++, text: t.slice(0, 40), ref });
+            }
           }
           return out.slice(0, 60);
         }""")
@@ -390,8 +397,18 @@ def _keyarea_score(t: str) -> int:
     return 0
 
 
-async def _click_item(page, text: str) -> bool:
-    """Clicca un elemento dato il suo testo (visto da _clickables). Prova get_by_text poi ruolo."""
+async def _click_item(page, text: str, ref: str | None = None) -> bool:
+    """Clicca un elemento visto da _clickables. Se ref e' disponibile (data-af-ref iniettato al
+    momento dello snapshot) prova quello per primo: un selettore diretto, niente ambiguita' di
+    testo. Poi cascata di fallback per testo (get_by_text -> ruolo), gia' robusta di suo qui
+    perche' il testo e' quello REALE del DOM (non annotato/decorato come in page2text)."""
+    if ref:
+        try:
+            loc = page.locator(f"[data-af-ref='{ref}']").first
+            if await loc.count() and await loc.is_visible():
+                await loc.click(timeout=2500); return True
+        except Exception:
+            pass
     try:
         loc = page.get_by_text(text, exact=False).first
         if await loc.count() and await loc.is_visible():
@@ -442,19 +459,19 @@ async def _open_key_section(page, log=None, depth: int = 0) -> bool:
         sample = " | ".join(it["text"] for it in items[:20])
         log.dbg("cliccabili visti", n=len(items), sample=sample, depth=depth)
         log.step("KEY", "esploro pagina", f"{len(items)} elementi (liv {depth})", "info")
-    scored = sorted(((_keyarea_score(it["text"]), it["text"]) for it in items if _keyarea_score(it["text"]) > 0),
+    scored = sorted(((_keyarea_score(it["text"]), it["text"], it.get("ref")) for it in items if _keyarea_score(it["text"]) > 0),
                     key=lambda x: -x[0])
     if not scored:
         return False
     start_url = page.url
     tried = set()
     # prova i top candidati (max 4): navigali UNO A UNO finche' uno porta alle chiavi
-    for score, txt in scored[:4]:
+    for score, txt, ref in scored[:4]:
         if txt in tried:
             continue
         tried.add(txt)
         if log: log.step("KEY", "provo", f"{txt} (score {score})", "ai")
-        if not await _click_item(page, txt):
+        if not await _click_item(page, txt, ref):
             continue
         await _wait_settled(page, 2500)
         # ARRIVATO? verifica deterministica
