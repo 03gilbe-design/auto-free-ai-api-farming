@@ -143,7 +143,11 @@ con quel valore esatto (es. "e3") oltre al testo — e' piu' affidabile del test
 {{"action":"giveup"}} se impossibile
 REGOLE: usa SOLO testo/ref che vedi ELENCATO sopra; NON inventare bottoni assenti. Se NON c'e' un
 bottone Google nella lista, NON scriverlo: compila il modulo email/password presente o cerca il
-campo email per ricevere un token. Google solo se compare davvero. Mai cookie/privacy/social."""
+campo email per ricevere un token. Google solo se compare davvero. Mai cookie/privacy/social.
+PRIORITA' DI AVANZAMENTO: se un campo mostra gia' *X="v"* o un radio/checkbox e' gia' selezionato
+E c'e' un bottone Continue/Next/Avanti/Continua/Skip/Salta visibile -> CLICCALO SUBITO, non
+toccare altri campi opzionali (es. campo libero "specifica altro" quando hai gia' scelto un
+radio). Rispondere a UNA domanda per pagina basta quasi sempre per sbloccare Continue."""
 
 _SYS_VISION = """Sei un agente che automatizza signup per API key gratuite. Account: {acct}, nome {nm}.
 La password NON ti viene fornita (la inserisce il codice): per un campo password usa value "";
@@ -183,14 +187,27 @@ def _strip_deco(s: str) -> str:
     return re.sub(r"^[\[\<\*#\s]+|[\]\>\*\s]+$", "", s or "").strip()
 
 
-async def _exec_by_ref(page, ref: str):
+_FILLABLE_TAGS = {"input", "textarea"}
+
+
+async def _exec_by_ref(page, ref: str, require_fillable: bool = False):
     """Risolve un ref stabile (data-af-ref, iniettato da page2text al momento della lettura) in
     un Locator visibile, o None se assente/non piu' visibile. Un solo selettore diretto, niente
-    ambiguita' testuale: stesso pattern di Playwright MCP / browser-use ('snapshot + ref')."""
+    ambiguita' testuale: stesso pattern di Playwright MCP / browser-use ('snapshot + ref').
+
+    require_fillable=True (usato da 'fill'): rifiuta un elemento che non e' input/textarea,
+    invece di tentare .fill() su un bottone e poi cadere nel fallback "qualsiasi textbox
+    visibile" — che una volta ha scritto un'email nel campo SBAGLIATO (visto live: l'AI ha
+    provato a 'fill' un badge account [nome@mail] non un vero campo, il fallback generico ha
+    trovato ed edited il campo testo libero di un'altra domanda della pagina)."""
     try:
         loc = page.locator(f"[data-af-ref='{ref}']").first
         if not (await loc.count() and await loc.is_visible()):
             return None
+        if require_fillable:
+            tag = await loc.evaluate("el => el.tagName.toLowerCase()")
+            if tag not in _FILLABLE_TAGS:
+                return None
         return loc
     except Exception:
         return None
@@ -233,14 +250,22 @@ async def _exec(page, act: dict, log=None) -> str | None:
                             ref = None
             except Exception:
                 ref = None
-    elif ref and a == "fill":
-        loc = await _exec_by_ref(page, ref)
+    ref_blocked_fill = False
+    if ref and a == "fill":
+        loc = await _exec_by_ref(page, ref, require_fillable=True)
         if loc is not None:
             try:
                 await loc.fill(act.get("value", ""), timeout=2500)
                 return "textbox"
             except Exception:
                 pass
+        else:
+            # ref presente ma punta a qualcosa che NON e' un vero campo (es. un bottone/badge
+            # account) -> l'AI ha sbagliato bersaglio. NON degradare al fallback "qualsiasi
+            # textbox visibile": scriverebbe il valore nel campo SBAGLIATO della pagina (visto
+            # live: un fill fallito sul badge account ha finito per riscrivere il campo testo
+            # libero di un'altra domanda). Meglio un fallimento pulito -> fail_streak, riprova.
+            ref_blocked_fill = True
     elif ref and a == "select":
         loc = await _exec_by_ref(page, ref)
         if loc is not None:
@@ -270,6 +295,8 @@ async def _exec(page, act: dict, log=None) -> str | None:
                     await loc.click(timeout=3000)
                     return _TAG2TYPE[tag]
         elif a == "fill":
+            if ref_blocked_fill:
+                return None  # ref puntava a un non-campo: fallimento pulito, no fallback a caso
             ph = _strip_deco(act.get("placeholder", ""))
             val = act.get("value", "")
             # cascata: placeholder -> aria-label -> name/id -> textbox visibile dentro una modale
