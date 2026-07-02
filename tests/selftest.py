@@ -8,7 +8,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 ROOT = HERE.parent
 TESTS = ["tests/test_offline.py", "tests/test_exec_dialog.py", "tests/test_page2text_progress.py",
-         "tests/test_radio_select.py", "tests/test_name_split.py",
+         "tests/test_radio_select.py", "tests/test_name_split.py", "tests/test_account_badge_filter.py",
          "tests/test_real_offline.py", "tests/test_regression.py"]
 
 

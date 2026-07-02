@@ -120,11 +120,18 @@ _JS_EXTRACT = r"""
     "[id*='gdpr' i],[class*='gdpr' i],[aria-label*='cookie' i]," +
     "[id*='cybot' i],[class*='cybot' i],[id*='onetrust' i],[class*='onetrust' i]," +
     "[id*='didomi' i],[class*='didomi' i],[id*='usercentrics' i]");
+  // account-badge nell'header (es. "[nome@mail.com]" che apre il menu profilo): il testo e'
+  // SOLO un'email, nessuna azione vera dietro per il nostro scopo. Mostrarlo come bottone
+  // azionabile confonde l'AI, che ci prova a ripetizione invece di avanzare col task reale
+  // (visto live su Cohere: l'AI ha tentato 'fill' su questo badge finche' non si e' arresa).
+  const _EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   for (const el of nodes) {
     if (!vis(el)) continue;
     if (!modalEl && _inCookie(el)) continue;   // banner cookie = rumore, salta
     const tag = el.tagName.toLowerCase();
     const role = (el.getAttribute('role') || '').toLowerCase();
+    if ((tag === 'button' || role === 'button' || tag === 'a') &&
+        _EMAIL_RX.test((el.innerText || el.textContent || '').trim())) continue;
     const t = txt(el);
     // dedupe per posizione+testo
     const r = el.getBoundingClientRect();
