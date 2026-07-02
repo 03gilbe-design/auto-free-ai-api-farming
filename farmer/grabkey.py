@@ -4,15 +4,18 @@ Strategia (albero step 6):
   1. goto key_url provider
   2. cerca key gia visibile in chiaro (regex su input readonly/code/body)
   3. se mascherata -> click "Copia" -> leggi clipboard
-  4. se assente -> click "Create/Crea" -> [nome 'pcAi'] -> [dropdown obbligatori] -> conferma
+  4. se assente -> click "Create/Crea" -> [nome key] -> [dropdown obbligatori] -> conferma
      -> loading -> rileggi (modal/barra/clipboard)
   5. niente -> needs_ai=True
 Regex formato da gitleaks/formati noti.
 """
 from __future__ import annotations
-import re
+import os, re, time
 
-KEY_NAME = "pcAi"
+# nome dato alla key generata: configurabile (SIGNUP_KEY_NAME), altrimenti datato
+# (pcAi-2026-07-02) cosi' su dashboard con piu' key create in run diversi si distinguono a colpo
+# d'occhio invece di avere N key tutte chiamate "pcAi".
+KEY_NAME = os.environ.get("SIGNUP_KEY_NAME", "").strip() or time.strftime("pcAi-%Y-%m-%d")
 
 # provider -> {key_url, key_re, dropdowns}
 # FONTE UNICA = sites.json (via registry). Niente piu' dati duplicati qui.
@@ -606,15 +609,25 @@ async def _click_opener(page, texts) -> str | None:
                     return txt
             except Exception:
                 continue
-    # 2) FALLBACK regex semantica sul testo visibile (verbo + key/token)
+    # 2) FALLBACK regex semantica sul testo visibile (verbo + key/token). Oltre a button/a/
+    # [role=button], scansiona anche elementi GENERICI con cursor:pointer (div/span cliccabili
+    # via onclick/JS, senza ruolo semantico) — alcuni siti (Mistral: "Crea nuova chiave") non
+    # usano un vero <button>, e il tier 1+questa prima versione del tier 2 li mancava del tutto.
     try:
         cand = await page.evaluate(r"""(rxSrc) => {
           const rx = new RegExp(rxSrc, 'i');
-          for (const e of document.querySelectorAll("button, a, [role=button]")) {
-            const r=e.getBoundingClientRect(); const s=getComputedStyle(e);
-            if (r.width<4||r.height<4||s.visibility==='hidden'||s.display==='none') continue;
-            const t=(e.innerText||e.textContent||'').replace(/\s+/g,' ').trim();
-            if (t && rx.test(t)) return t;
+          const seen = new Set();
+          const specific = document.querySelectorAll("button, a, [role=button]");
+          const generic = document.querySelectorAll("div, span, [role], li");
+          for (const nodes of [specific, generic]) {
+            for (const e of nodes) {
+              const r=e.getBoundingClientRect(); const s=getComputedStyle(e);
+              if (r.width<4||r.height<4||s.visibility==='hidden'||s.display==='none') continue;
+              if (nodes===generic && s.cursor!=='pointer') continue;  // generico: solo se cliccabile
+              const t=(e.innerText||e.textContent||'').replace(/\s+/g,' ').trim();
+              if (!t || t.length>60 || seen.has(t)) continue; seen.add(t);
+              if (rx.test(t)) return t;
+            }
           }
           return null;
         }""", _OPENER_RX.pattern)

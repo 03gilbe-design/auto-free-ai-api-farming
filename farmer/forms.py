@@ -66,6 +66,25 @@ async def fill_form(page, log=None) -> dict:
     # (opacity 0, stile custom sopra) -> check(force=True) bypassa la visibilita'. Un solo modo
     # generico, niente selettori per-sito.
     checks = 0
+
+    async def _really_checked(cb) -> bool:
+        """Verifica lo stato REALE dopo un tentativo di check, non assume successo dal solo
+        'nessuna eccezione'. Un mouse-click a coordinate puo' mancare il bersaglio (overlay,
+        scroll residuo, elemento spostato) e contare un consenso mai davvero spuntato -> submit
+        bloccato piu' avanti senza motivo apparente. Se non verificabile (custom widget senza
+        is_checked/aria-checked), resta ottimista come prima (non regredire su falsi negativi)."""
+        try:
+            return bool(await cb.is_checked())
+        except Exception:
+            pass
+        try:
+            aria = await cb.get_attribute("aria-checked")
+            if aria is not None:
+                return aria == "true"
+        except Exception:
+            pass
+        return True  # non verificabile: comportamento precedente (ottimista)
+
     try:
         cbs = page.locator("input[type=checkbox], [role=checkbox]")
         n = await cbs.count()
@@ -82,30 +101,32 @@ async def fill_form(page, log=None) -> dict:
             except Exception:
                 pass
             try:
-                await cb.scroll_into_view_if_needed(timeout=1500)
-            except Exception:
-                pass
-            try:
                 await cb.check(force=True, timeout=1500)
-                checks += 1
+                if await _really_checked(cb):
+                    checks += 1
+                    continue
             except Exception as e1:
                 if log: log.dbg("check fail", i=i, err=str(e1)[:150])
-                try:
-                    await cb.click(force=True, timeout=1200); checks += 1
-                except Exception as e2:
-                    if log: log.dbg("click fail", i=i, err=str(e2)[:150])
-                    # ULTIMO tentativo: click MOUSE reale sulle coordinate (non .check/.click di
-                    # Playwright, non JS .checked). Componenti React-controllati (Radix/shadcn)
-                    # ignorano .checked+dispatchEvent: serve l'evento nativo del sistema operativo
-                    # che il synthetic event system di React intercetta davvero.
-                    try:
-                        box = await cb.bounding_box()
-                        if box:
-                            cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
-                            await page.mouse.click(cx, cy)
-                            checks += 1
-                    except Exception as e3:
-                        if log: log.dbg("mouse check fail", i=i, err=str(e3)[:150])
+            try:
+                await cb.click(force=True, timeout=1200)
+                if await _really_checked(cb):
+                    checks += 1
+                    continue
+            except Exception as e2:
+                if log: log.dbg("click fail", i=i, err=str(e2)[:150])
+            # ULTIMO tentativo: click MOUSE reale sulle coordinate (non .check/.click di
+            # Playwright, non JS .checked). Componenti React-controllati (Radix/shadcn)
+            # ignorano .checked+dispatchEvent: serve l'evento nativo del sistema operativo
+            # che il synthetic event system di React intercetta davvero.
+            try:
+                box = await cb.bounding_box()
+                if box:
+                    cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+                    await page.mouse.click(cx, cy)
+                    if await _really_checked(cb):
+                        checks += 1
+            except Exception as e3:
+                if log: log.dbg("mouse check fail", i=i, err=str(e3)[:150])
     except Exception as e:
         if log: log.dbg("consensi loop fail", err=str(e))
     rep["consents"] = checks
