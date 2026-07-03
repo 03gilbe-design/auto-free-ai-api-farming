@@ -162,4 +162,13 @@ async def signup_with_github(ctx, page, log=None) -> str | None:
         await page.bring_to_front()
     except Exception:
         pass
+    # Guardia (GPT bug 7): se la scheda principale è ancora su un host GitHub, il login/
+    # authorize NON si è concluso (sei fermo su login form o consent) — non tornare "github"
+    # (marcherebbe il ramo come riuscito). Un flow OK esce da github.com verso il sito.
+    try:
+        if _is_github_host(page.url):
+            if log: log.step("GITHUB", "ancora su github", "login non concluso", "warn")
+            return None
+    except Exception:
+        pass
     return "github"

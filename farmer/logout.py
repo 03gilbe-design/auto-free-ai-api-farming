@@ -65,7 +65,10 @@ async def logout(page, site: dict, log=None) -> bool:
             await page.goto(base + p, timeout=12000, wait_until="domcontentloaded")
             await page.wait_for_timeout(1200)
             body = (await page.inner_text("body"))[:1500].lower()
-            if any(w in body for w in ["sign in", "log in", "accedi", "continue with", "logged out", "signed out"]):
+            # "continue with" removed: a page saying "Continue with Google to connect another
+            # workspace" is NOT proof of logout (GPT bug 10). Keep only signals that a logged-in
+            # session is actually gone: an explicit sign-in prompt or a logged-out confirmation.
+            if any(w in body for w in ["sign in", "log in", "accedi", "logged out", "signed out"]):
                 if log: log.step("LOGOUT", "via url", p, "ok")
                 return True
         except Exception:

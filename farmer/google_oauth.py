@@ -95,8 +95,11 @@ async def _security_checkpoint(gp) -> str | None:
     return None
 
 
-async def handle_google_page(gp, email: str, log=None) -> None:
-    """Gestisce la pagina Google (chooser/continua-come/consent/auto)."""
+async def handle_google_page(gp, email: str, log=None) -> str | None:
+    """Gestisce la pagina Google (chooser/continua-come/consent/auto).
+    Ritorna "checkpoint" se il flow si ferma su una verifica di sicurezza (2FA / device /
+    email verification) che deve completare l'umano — così il chiamante NON marca il login
+    come riuscito. None = flow gestito normalmente."""
     try:
         await gp.wait_for_load_state("domcontentloaded", timeout=8000)
     except Exception:
@@ -110,7 +113,7 @@ async def handle_google_page(gp, email: str, log=None) -> None:
             msg = ("approva l'accesso sul telefono (notifica Google)" if chk == "two_factor"
                    else "apri la mail e conferma, poi rilancia")
             log.step("GOOGLE", "verifica di sicurezza", f"{chk}: {msg}", "warn")
-        return
+        return "checkpoint"
     user = email.split("@")[0]
     chosen = False  # account gia scelto (tile o email digitata) -> non ri-cliccare il testo
     for _ in range(10):  # piu' giri: alcuni flow (Cohere) mostrano il chooser dopo qualche secondo
@@ -303,7 +306,11 @@ async def signup_with_google(ctx, page, email: str, log=None) -> str | None:
             log.dbg("popup contenuto", url=gp.url, body=txt)
         except Exception as e:
             log.dbg("popup illeggibile", err=str(e))
-    await handle_google_page(gp, email, log)
+    status = await handle_google_page(gp, email, log)
+    if status == "checkpoint":
+        # 2FA / device / email verification: il login NON è concluso, serve l'umano.
+        # Non tornare "google" (marcherebbe done_signup) — segnala che è fermo.
+        return None
     # se era un popup, ora si chiude da solo: aspetta che la SCHEDA principale esca dal login
     if gp is not page:
         for _ in range(16):  # ~8s: la sessione deve propagarsi alla scheda madre

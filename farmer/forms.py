@@ -204,7 +204,8 @@ async def complete_form(page, log=None) -> dict:
     + se ha inviato. Chiamato prima del fallback AI: molti 'muri' sono solo un form da riempire."""
     before = page.url
     rep = await fill_form(page, log)
-    acted = any([rep.get("email"), rep.get("name"), rep.get("org"), rep.get("consents")])
+    acted = any([rep.get("email"), rep.get("name"), rep.get("last_name"),
+                 rep.get("org"), rep.get("consents")])
     sent = False
     if acted:
         sent = await submit(page, log)

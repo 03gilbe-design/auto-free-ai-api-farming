@@ -99,9 +99,10 @@ async def main():
                 if _have_key(nm, forms.EMAIL):
                     log.step("SALTO", nm, f"gia presa per {forms.EMAIL}", "skip")
                     continue
-                if not only and results.get(nm, {}).get("status") == "ok":
-                    log.step("SALTO", nm, "gia completato", "skip")
-                    continue
+                # NB (GPT bug 9): niente skip basato su results.json status=="ok" — non è
+                # account-aware, un "ok" salvato da un altro account farebbe saltare il sito
+                # anche per l'account corrente. _have_key() sopra è già la guardia giusta
+                # (sito+account in keys.txt); se manca la chiave per QUESTO account, si rifà.
                 # MURO esterno noto (dato in sites.json) -> skip CON MOTIVO, niente martellamento.
                 if not registry.automatable(nm):
                     wall = registry.wall_of(nm)
