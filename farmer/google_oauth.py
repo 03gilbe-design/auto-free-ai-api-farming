@@ -265,7 +265,16 @@ async def handle_google_page(gp, email: str, log=None) -> str | None:
                         break
             except Exception:
                 pass
-        await gp.wait_for_timeout(700)
+        # Coda del loop: se il popup Google si è chiuso (login RIUSCITO, la finestra si
+        # chiude da sola) questo wait_for_timeout lanciava "Target page closed" NON protetto
+        # e faceva crashare l'intero run (visto live su AI21Labs: email+password ok, poi
+        # crash). Esci pulito appena il popup è chiuso.
+        try:
+            if gp.is_closed():
+                return
+            await gp.wait_for_timeout(700)
+        except Exception:
+            return
     return
 
 
