@@ -382,7 +382,15 @@ async def _clickables(page) -> list[dict]:
 
 
 # TRAPPOLE: contengono "api" ma NON sono le chiavi (documentazione, riferimenti, ecc.)
-_TRAP_RX = re.compile(r"reference|docs?|document|demo|community|blog|pricing|tutorial|guide|example|playground", re.I)
+_TRAP_RX = re.compile(
+    r"reference|docs?|document|demo|community|blog|pricing|tutorial|guide|example|playground|"
+    # GPT bug 4: frasi INFORMATIVE/warning che parlano di chiavi ma NON sono un bottone di
+    # creazione — "How to create API keys" (docs), "Dismiss API key update warning", "Learn
+    # more about API keys". Un vero bottone di creazione è "Create API Key"/"Generate key"/
+    # "+ New key", non inizia mai con questi lead-in, quindi demoterli non tocca i veri.
+    r"how to|learn (more|about)|what (is|are)|read (more|the)|\bdismiss\b|\bwarning\b|"
+    r"update warning|got it|understand",
+    re.I)
 
 
 def _keyarea_score(t: str) -> int:
