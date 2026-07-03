@@ -504,6 +504,30 @@ async def _open_key_section(page, log=None, depth: int = 0) -> bool:
                 await _wait_settled(page, 2000)
         except Exception:
             pass
+    if await _is_key_area_now(page):
+        return True
+    # FALLBACK route-SPA (idea: molte dashboard SPA nascondono le API keys sotto una
+    # route settings raggiungibile solo per URL — es. AI21 studio.ai21.com/v2/workspaces/
+    # {id}/discover: il sidebar non mostra "API Keys", che sta in .../settings). Se siamo
+    # su una route con un ultimo segmento tipo discover/home/overview, prova a sostituirlo
+    # con le route-chiave note e verifica. Generico (vale per qualsiasi SPA con questa
+    # forma), opt-in di fatto (parte solo qui, dopo che l'esplorazione a click ha fallito).
+    if depth == 0:
+        import re as _re
+        m = _re.match(r"(https?://[^?#]+?)/(discover|home|overview|dashboard|welcome)(/?)(\?.*)?$",
+                      page.url, _re.I)
+        if m:
+            base = m.group(1)
+            for seg in ("settings/api-keys", "settings/keys", "api-keys", "keys",
+                        "settings/api", "settings"):
+                try:
+                    await page.goto(f"{base}/{seg}", timeout=12000, wait_until="domcontentloaded")
+                    await _wait_settled(page, 2500)
+                    if await _is_key_area_now(page):
+                        if log: log.step("KEY", "route SPA", f"{base}/{seg}", "ok")
+                        return True
+                except Exception:
+                    continue
     return await _is_key_area_now(page)
 
 

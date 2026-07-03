@@ -21,7 +21,7 @@ _EXTRA_PATH = Path(__file__).parent.parent / "data" / "sites_extra.json"
 _CACHE: dict | None = None
 
 # campi che il vecchio grabkey.PROVIDERS si aspetta
-_PROVIDER_KEYS = ("key_url", "key_re", "dropdowns")
+_PROVIDER_KEYS = ("key_url", "key_re", "dropdowns", "key_panel")
 
 
 def load(force: bool = False) -> list[dict]:
