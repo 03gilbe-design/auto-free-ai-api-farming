@@ -20,8 +20,13 @@ locally.
 straight onto the actual dashboard, real API key highlighted. Interactive version:
 [`docs/banner-google-signup.html`](docs/banner-google-signup.html).*
 
-Every run also generates a step-by-step map (`out/path.html`) and opens it automatically — see
-the terminal-style replay in [`docs/run.gif`](docs/run.gif) / [`docs/live-demo.html`](docs/live-demo.html).
+Every run also generates a step-by-step map (`out/path.html`) and opens it automatically — this
+is the terminal-style replay of the same real run, side by side with the backbone lighting up
+stage by stage:
+
+![The agent farming a key live: the terminal types each real step while the stage backbone lights up](docs/run.gif)
+
+*Interactive version: [`docs/live-demo.html`](docs/live-demo.html).*
 
 Works on both **English and Italian** UIs — matching uses semantic patterns (accessible
 role, aria-label, visible text) with layered fallbacks instead of hardcoded exact strings, so
