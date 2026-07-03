@@ -85,15 +85,36 @@ def _load():
     return sites
 
 
-# redact anything that looks like an email or a real key before it reaches the page
+# redact anything that looks like an email or a real key before it reaches the page.
+# PRIMARY: the exact key values out/keys.txt already recorded for THIS run — no guessing,
+# whatever provider/prefix it is gets caught (a prefix whitelist is whack-a-mole: cohere_ was
+# missing until it bit us). FALLBACK: a generic prefix heuristic, only as a safety net for a
+# key that for some reason isn't in keys.txt yet.
 import re as _re
 _EMAIL = _re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+")
-_KEYISH = _re.compile(r"\b(gsk_|sk-|co_|fw_|csk-|di_|key_)[A-Za-z0-9_\-]{6,}")
+_KEYISH = _re.compile(r"\b(gsk_|sk-|co_|cohere_|fw_|csk-|di_|key_)[A-Za-z0-9_\-]{6,}")
+_KEYSFILE = Path(__file__).parent.parent / "out" / "keys.txt"
+
+
+def _harvested_keys() -> list[str]:
+    out = []
+    try:
+        for ln in _KEYSFILE.read_text(encoding="utf-8").splitlines():
+            parts = ln.split("\t")
+            if len(parts) >= 2 and parts[1].strip():
+                out.append(parts[1].strip())
+    except Exception:
+        pass
+    return out
 
 
 def _redact(s: str) -> str:
     s = _EMAIL.sub("you@example.com", s or "")
-    s = _KEYISH.sub(lambda m: m.group(1) + "•" * 8, s)
+    for real_key in _harvested_keys():
+        if real_key and real_key in s:
+            head = real_key[:min(8, len(real_key) // 2)]
+            s = s.replace(real_key, head + "•" * 8)
+    s = _KEYISH.sub(lambda m: m.group(1) + "•" * 8, s)  # rete di sicurezza per key non ancora salvate
     return s
 
 

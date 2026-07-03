@@ -14,11 +14,14 @@ Cohere, Fireworks, DeepInfra, and 25+ more. Drives a real (or headless) Chrome/C
 session with Playwright, follows each site's signup flow, extracts the API key, and saves it
 locally.
 
-![The agent farming a key live: the terminal types each real step while the stage backbone lights up](docs/run.gif)
+![Real screenshots: signing in with Google and landing on the live API-keys dashboard, key row highlighted](docs/run-google-signup.gif)
 
-*A real replay (redacted) — the agent dismisses the cookie wall, clicks through Google OAuth,
-lands on the key page, and hits an honest wall. Every run generates this map (`out/path.html`)
-and opens it; drag it into any browser or see the interactive [`docs/live-demo.html`](docs/live-demo.html).*
+*A real run (redacted) — Google sign-in with no chooser prompt (one account already linked),
+straight onto the actual dashboard, real API key highlighted. Interactive version:
+[`docs/banner-google-signup.html`](docs/banner-google-signup.html).*
+
+Every run also generates a step-by-step map (`out/path.html`) and opens it automatically — see
+the terminal-style replay in [`docs/run.gif`](docs/run.gif) / [`docs/live-demo.html`](docs/live-demo.html).
 
 Works on both **English and Italian** UIs — matching uses semantic patterns (accessible
 role, aria-label, visible text) with layered fallbacks instead of hardcoded exact strings, so
