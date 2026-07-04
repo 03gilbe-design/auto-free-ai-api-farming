@@ -101,7 +101,7 @@ _STRONG_COOKIE = ["reject all", "decline all", "deny all", "reject non-essential
                   "only essential", "rifiuta tutto", "confirm my choice", "confirm choices",
                   "save preferences", "save my choices", "save choices", "conferma scelte",
                   "accept all cookies", "accept all", "allow all", "accetta tutti",
-                  "manage cookies", "agree and close", "agree and continue"]
+                  "agree and close", "agree and continue"]
 
 
 async def dismiss(page, log=None) -> bool:

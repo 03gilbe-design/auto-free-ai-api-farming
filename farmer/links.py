@@ -13,7 +13,7 @@ _INTENT = {
                 "text": ["sign in", "signin", "log in", "login", "accedi", "accesso", "entra",
                          # icone Material ricorrenti (JinaAI: il login e' un'icona 'person'/'account')
                          "person", "account_circle", "login", "vpn_key"]},
-    "apikeys": {"href": ["api-key", "apikey", "api_key", "/keys", "/tokens", "token", "developer", "dashboard", "settings/api"],
+    "apikeys": {"href": ["api-key", "apikey", "api_key", "/keys", "/tokens", "token", "developer", "settings/api"],
                 "text": ["api key", "api keys", "chiavi api", "tokens", "developer", "dashboard", "credentials", "manage keys"]},
 }
 _TRAP_HREF = ["play.google.com", "apps.apple.com", "twitter.com", "x.com", "facebook.com",
