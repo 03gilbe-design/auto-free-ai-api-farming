@@ -441,16 +441,21 @@ async def _is_key_area_now(page) -> bool:
     testo 'secret key', o un campo/elemento che sembra una key. Cosi' verifico DOPO ogni click
     se ho trovato la strada giusta (esplora-e-verifica), invece di fidarmi del punteggio."""
     try:
-        return await page.evaluate(r"""() => {
+        return await page.evaluate(r"""(trapSrc) => {
+          const trap = new RegExp(trapSrc, 'i');
           const t = (document.body.innerText || '').toLowerCase();
-          if (/secret key|create (new )?(api )?key|generate (api )?key|your api key|crea (nuova )?chiave/.test(t)) return true;
-          // bottone esplicito di creazione chiave
+          // NB (GPT bug 3): match sul body gated dal contesto -- "How to create API keys"
+          // (docs) matchava "create api key". Guardo i 30 char PRIMA del match: lead-in
+          // informativo (how to/learn/what is...) = NON sono nella zona chiavi.
+          const m = t.match(/secret key|create (new )?(api )?key|generate (api )?key|your api key|crea (nuova )?chiave/);
+          if (m && !trap.test(t.slice(Math.max(0, m.index - 30), m.index))) return true;
+          // bottone esplicito di creazione chiave (stesso gating sul testo del bottone)
           for (const b of document.querySelectorAll('button,a,[role=button]')) {
             const x = (b.innerText||'').toLowerCase();
-            if (/create.*key|generate.*key|new api key|crea.*chiave/.test(x)) return true;
+            if (/create.*key|generate.*key|new api key|crea.*chiave/.test(x) && !trap.test(x)) return true;
           }
           return false;
-        }""")
+        }""", _TRAP_RX.pattern)
     except Exception:
         return False
 
@@ -637,6 +642,10 @@ async def _click_opener(page, texts) -> str | None:
                 loc = page.locator(f"{tag}:has-text({_css_str(t)})").first
                 if await loc.count() and await loc.is_visible():
                     txt = ((await loc.inner_text()) or t).strip()
+                    # NB (GPT bug 5): has-text e' substring -- "How to create API keys"
+                    # (docs) conteneva "create api key". Trappole escluse.
+                    if _TRAP_RX.search(txt):
+                        continue
                     await loc.click(timeout=2500)
                     return txt
             except Exception:
@@ -646,8 +655,9 @@ async def _click_opener(page, texts) -> str | None:
     # via onclick/JS, senza ruolo semantico) — alcuni siti (Mistral: "Crea nuova chiave") non
     # usano un vero <button>, e il tier 1+questa prima versione del tier 2 li mancava del tutto.
     try:
-        cand = await page.evaluate(r"""(rxSrc) => {
+        cand = await page.evaluate(r"""([rxSrc, trapSrc]) => {
           const rx = new RegExp(rxSrc, 'i');
+          const trap = new RegExp(trapSrc, 'i');
           const seen = new Set();
           const specific = document.querySelectorAll("button, a, [role=button]");
           const generic = document.querySelectorAll("div, span, [role], li");
@@ -658,11 +668,11 @@ async def _click_opener(page, texts) -> str | None:
               if (nodes===generic && s.cursor!=='pointer') continue;  // generico: solo se cliccabile
               const t=(e.innerText||e.textContent||'').replace(/\s+/g,' ').trim();
               if (!t || t.length>60 || seen.has(t)) continue; seen.add(t);
-              if (rx.test(t)) return t;
+              if (rx.test(t) && !trap.test(t)) return t;  // GPT bug 5: no docs phrases
             }
           }
           return null;
-        }""", _OPENER_RX.pattern)
+        }""", [_OPENER_RX.pattern, _TRAP_RX.pattern])
         if cand:
             loc = page.get_by_text(cand, exact=False).first
             if await loc.count() and await loc.is_visible():

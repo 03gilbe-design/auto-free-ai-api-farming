@@ -16,6 +16,8 @@ _INTENT = {
     "apikeys": {"href": ["api-key", "apikey", "api_key", "/keys", "/tokens", "token", "developer", "dashboard", "settings/api"],
                 "text": ["api key", "api keys", "chiavi api", "tokens", "developer", "dashboard", "credentials", "manage keys"]},
 }
+_APIKEY_STRONG = re.compile(r"key|api|token|credential")
+
 _TRAP_HREF = ["play.google.com", "apps.apple.com", "twitter.com", "x.com", "facebook.com",
               "linkedin.com", "youtube.com", "instagram.com", "/privacy", "/terms", "/legal", "/cookie"]
 
@@ -62,6 +64,10 @@ def _score(href, txt, intent) -> int:
     # esatto corto premia (es "Sign in") vs frase lunga
     if txt in cfg["text"]:
         sc += 2
+    # NB (GPT bug 2): per apikeys serve un segnale FORTE key/api/token/credential.
+    # "Dashboard"/"Developer" da soli sono boost deboli: sotto soglia -> AI fallback.
+    if intent == "apikeys" and not _APIKEY_STRONG.search(href + " " + txt):
+        sc = min(sc, 3)
     return sc
 
 
