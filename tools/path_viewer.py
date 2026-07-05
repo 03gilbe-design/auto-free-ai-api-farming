@@ -170,9 +170,6 @@ def _steps_for(steps):
             "outcome": _redact(_tr(s.get("outcome", ""))),
             "detail": _redact(_tr(s.get("detail", ""))),
             "kind": s.get("kind", "info"),
-            "shot": s.get("shot"),
-            "box": s.get("box"),
-            "real_kind": s.get("real_kind"),
         })
     return out
 
@@ -217,7 +214,7 @@ h1{font-size:clamp(19px,3vw,27px);margin:0;letter-spacing:-.02em;font-weight:700
 .pill{font-family:var(--mono);font-size:13px;color:var(--key);border:1px solid #1c4a55;
  background:#0c2830;padding:3px 11px;border-radius:20px}
 .sub{color:var(--dim);font-size:14px;margin:4px 0 18px;max-width:66ch}
-.stage{display:grid;grid-template-columns:220px 1fr 1fr;gap:18px}
+.stage{display:grid;grid-template-columns:220px 1fr;gap:18px}
 @media(max-width:660px){.stage{grid-template-columns:1fr}}
 .spine{display:flex;flex-direction:column;gap:4px;position:relative}
 .spine::before{content:"";position:absolute;left:15px;top:14px;bottom:14px;width:2px;background:var(--line);z-index:0}
@@ -277,13 +274,6 @@ runs out.</p>
     <span class="nm" id="agentnm">agent — live</span><span class="pr" id="pr">0 / 0</span></div>
     <div class="log" id="log"></div></div>
     <div class="verdict" id="verdict"></div></div>
-  <div id="live-panel" style="border-left:1px solid var(--line);padding:1rem;overflow:auto">
-    <div style="position:relative;background:var(--panel)">
-      <img id="live-shot" style="max-width:100%;display:block">
-      <div id="hl-box" style="position:absolute;border:3px solid var(--key);pointer-events:none;transition:all 0.2s"></div>
-    </div>
-    <div id="meta-text" style="font-size:0.85em;color:var(--dim);margin-top:0.5rem"></div>
-  </div>
 </div>
 <div class="controls"><button id="replay">▶ Replay</button><button class="ghost" id="skip">Skip to end</button></div>
 <div class="legend" id="legend"></div>
@@ -371,7 +361,6 @@ function addLine(s,i,last){const c=col(s.kind);
  const prev=logEl.querySelector('.cursor');if(prev)prev.remove();
  logEl.appendChild(row);logEl.scrollTop=logEl.scrollHeight;
  if(s.node)lightNode(s.node,s.kind);prEl.textContent=`${i+1} / ${cur().steps.length}`;}
-function positionBox(box,imgEl){if(!box||!imgEl.naturalWidth)return;const scaleX=imgEl.clientWidth/imgEl.naturalWidth;const scaleY=imgEl.clientHeight/imgEl.naturalHeight;const hbox=document.getElementById('hl-box');hbox.style.left=(box.x*scaleX)+'px';hbox.style.top=(box.y*scaleY)+'px';hbox.style.width=(box.width*scaleX)+'px';hbox.style.height=(box.height*scaleY)+'px';}
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}
 function cur(){return DATA[sel]||{name:'—',steps:[]}}
 function finish(){const st=cur().steps;const last=st[st.length-1];
@@ -385,7 +374,6 @@ function play(force){clearAll();const st=cur().steps;pill.textContent=cur().name
  if(!force&&(reduce||!ANIM)){st.forEach((s,i)=>addLine(s,i,i===st.length-1));finish();return;}
  const step=560;
  st.forEach((s,i)=>{timers.push(setTimeout(()=>{addLine(s,i,i===st.length-1);
-  const shotImg=document.getElementById('live-shot');if(s.shot){shotImg.src=s.shot;shotImg.onload=()=>positionBox(s.box,shotImg);}
   if(i===st.length-1)timers.push(setTimeout(finish,480));},i*step));});}
 function skip(){clearAll();const st=cur().steps;pill.textContent=cur().name;
  st.forEach((s,i)=>addLine(s,i,i===st.length-1));finish();}
