@@ -251,24 +251,18 @@ async def _exec(page, act: dict, log=None) -> str | None:
                         if not await loc.is_enabled():
                             ref = None  # disabled: cadi nella cascata testo (puo' spuntare consensi prima)
                         else:
-                            meta = await _capture_action(loc, "click")
                             await loc.click(timeout=3000)
-                            if log and meta: log.step("AZIONE", "click eseguito", kind="ok", **meta)
                             return "button"
                     except Exception:
                         ref = None
                 else:  # check / radio: stesso trattamento (entrambi Playwright .check())
                     kind = "checkbox" if a == "check" else "radio"
                     try:
-                        meta = await _capture_action(loc, a)
                         await loc.check(force=True, timeout=2500)
-                        if log and meta: log.step("AZIONE", f"{a} eseguito", kind="ok", **meta)
                         return kind
                     except Exception:
                         try:
-                            meta = await _capture_action(loc, a)
                             await loc.click(force=True, timeout=2000)
-                            if log and meta: log.step("AZIONE", f"{a} eseguito (click)", kind="ok", **meta)
                             return kind
                         except Exception:
                             ref = None
@@ -279,9 +273,7 @@ async def _exec(page, act: dict, log=None) -> str | None:
         loc = await _exec_by_ref(page, ref, require_fillable=True)
         if loc is not None:
             try:
-                meta = await _capture_action(loc, "fill")
                 await loc.fill(act.get("value", ""), timeout=2500)
-                if log and meta: log.step("AZIONE", "fill eseguito", kind="ok", **meta)
                 return "textbox"
             except Exception:
                 pass
@@ -297,15 +289,11 @@ async def _exec(page, act: dict, log=None) -> str | None:
         if loc is not None:
             opt = _strip_deco(act.get("option", "") or act.get("value", ""))
             try:
-                meta = await _capture_action(loc, "select")
                 await loc.select_option(label=opt, timeout=2500)
-                if log and meta: log.step("AZIONE", "select eseguito", kind="ok", **meta)
                 return "select"
             except Exception:
                 try:
-                    meta = await _capture_action(loc, "select")
                     await loc.select_option(value=opt, timeout=2000)
-                    if log and meta: log.step("AZIONE", "select eseguito (value)", kind="ok", **meta)
                     return "select"
                 except Exception:
                     pass
