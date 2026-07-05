@@ -222,8 +222,26 @@ async def _exec(page, act: dict, log=None) -> str | None:
     (quindi immune al bug dei decoratori [Text]/<Text> copiati dall'AI). Se il ref manca o e'
     stale (pagina cambiata dall'ultimo snapshot), cade nella cascata per-testo sotto — nessuna
     regressione, e' un livello di robustezza aggiuntivo, non un sostituto."""
+    from pathlib import Path
+    OUT = Path(__file__).parent.parent / "out"
+    SHOTS = OUT / "shots"
+    SHOTS.mkdir(exist_ok=True)
+
     a = act.get("action")
     ref = act.get("ref")
+    shot_n = [0]  # contatore incrementale screenshot
+    async def _capture_action(loc, action_type):
+        """Cattura bbox + real_kind + screenshot prima dell'azione."""
+        try:
+            box = await loc.bounding_box()
+            real_kind = await loc.evaluate("el => el.tagName.toLowerCase() + (el.type ? ':' + el.type : '')")
+            png = await page.screenshot()
+            shot_n[0] += 1
+            shot_path = SHOTS / f"{shot_n[0]:04d}.png"
+            shot_path.write_bytes(png)
+            return {"box": box, "real_kind": real_kind, "shot": str(shot_path.relative_to(OUT))}
+        except Exception:
+            return {}
     if ref and a in ("click", "check", "radio"):
         loc = await _exec_by_ref(page, ref)
         if loc is not None:

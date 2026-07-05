@@ -64,7 +64,7 @@ class Log:
         with _JSONL.open("a", encoding="utf-8") as f:
             f.write(json.dumps(kw, ensure_ascii=False) + "\n")
 
-    def step(self, stage: str, outcome: str, detail: str = "", kind: str = "info"):
+    def step(self, stage: str, outcome: str, detail: str = "", kind: str = "info", **extra):
         """Riga gerarchica compatta -> console + trace.txt. Questo Claude lo legge."""
         ic = _ICON.get(kind, "·")
         phrase = _PHRASE.get(stage, stage)
@@ -75,7 +75,7 @@ class Log:
         line = f"  {ic} [{stage}] {outcome}" + (f" — {detail}" if detail else "")
         with _TRACE.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
-        self._raw(ev="step", stage=stage, outcome=outcome, detail=detail, kind=kind)
+        self._raw(ev="step", stage=stage, outcome=outcome, detail=detail, kind=kind, **extra)
 
     def head(self, txt: str):
         line = f"\n=== {txt} ==="
