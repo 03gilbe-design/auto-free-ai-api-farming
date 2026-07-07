@@ -68,7 +68,9 @@ async def _try(scope, selectors, texts) -> str | None:
     # di accept (preferenza), e SOLO se c'e' anche un nome-cookie (no falsi positivi).
     try:
         txt = await scope.evaluate(r"""() => {
-          const verb = /\b(reject|decline|deny|refuse|accept|allow|confirm|save|agree|manage|got it|rifiuta|accetta|conferma|salva|nega|gestisci)\b/i;
+          // GPT bug 1: NO manage/gestisci -- "Manage cookies" apre il pannello preferenze,
+          // non chiude il banner: cliccarlo era un falso successo (e lasciava il banner aperto).
+          const verb = /\b(reject|decline|deny|refuse|accept|allow|confirm|save|agree|got it|rifiuta|accetta|conferma|salva|nega)\b/i;
           const noun = /\b(all|cookies?|choices?|preferences?|consent|necessary|essential|tracking|selection|scelt\w*|preferenz\w*|essenzial\w*)\b/i;
           const cands = [];
           for (const e of document.querySelectorAll("button, a, [role=button]")) {
@@ -101,7 +103,9 @@ _STRONG_COOKIE = ["reject all", "decline all", "deny all", "reject non-essential
                   "only essential", "rifiuta tutto", "confirm my choice", "confirm choices",
                   "save preferences", "save my choices", "save choices", "conferma scelte",
                   "accept all cookies", "accept all", "allow all", "accetta tutti",
-                  "manage cookies", "agree and close", "agree and continue"]
+                  # NB (GPT bug 1): NO "manage cookies" -- apre il pannello preferenze, non
+                  # chiude il banner: contarlo come dismiss era un falso successo.
+                  "agree and close", "agree and continue"]
 
 
 async def dismiss(page, log=None) -> bool:
